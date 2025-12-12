@@ -69,7 +69,7 @@ export default function ProjectsPage() {
             <div className="min-h-screen gradient-bg flex flex-col items-center justify-center">
                 <h1 className="text-2xl text-white mb-4">Sign in to view your projects</h1>
                 <button
-                    onClick={signInWithGoogle}
+                    onClick={() => signInWithGoogle()}
                     className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
                 >
                     Sign in with Google
