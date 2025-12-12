@@ -21,9 +21,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 });
         }
 
-        // Check user credits
+        // Check user credits (bypass for admins)
         const user = await getUser(userId);
-        if (!user || user.credits <= 0) {
+        if (!user) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        const isAdmin = user.isAdmin === true;
+        if (!isAdmin && user.credits <= 0) {
             return NextResponse.json({ error: 'Insufficient credits' }, { status: 403 });
         }
 

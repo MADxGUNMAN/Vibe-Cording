@@ -24,6 +24,7 @@ export interface User {
     imageUrl?: string;
     credits: number;
     totalCreation: number;
+    isAdmin?: boolean;
     createdAt: Timestamp;
 }
 
@@ -48,6 +49,7 @@ export interface Project {
     current_code: string;
     userId: string;
     isPublished: boolean;
+    model?: string; // The AI model used to create/update the project
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }
@@ -113,7 +115,8 @@ export async function createProject(
     userId: string,
     name: string,
     initialPrompt: string,
-    currentCode: string
+    currentCode: string,
+    model?: string
 ): Promise<string> {
     const projectRef = await addDoc(collection(db, 'projects'), {
         name,
@@ -121,6 +124,7 @@ export async function createProject(
         current_code: currentCode,
         userId,
         isPublished: false,
+        model: model || 'unknown',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     });

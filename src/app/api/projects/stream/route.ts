@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
         });
     }
 
-    if (user.credits <= 0) {
+    const isAdmin = user.isAdmin === true;
+    if (!isAdmin && user.credits <= 0) {
         return new Response(JSON.stringify({ error: 'Insufficient credits' }), {
             status: 403,
             headers: { 'Content-Type': 'application/json' }
@@ -213,7 +214,8 @@ export async function POST(request: NextRequest) {
                 userId,
                 prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''),
                 prompt,
-                cleanCode
+                cleanCode,
+                model
             );
 
             // Add messages

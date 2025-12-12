@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { useActiveGenerations } from '@/components/ActiveGenerationsProvider';
 
 type GenerationStep = 'idle' | 'analyzing' | 'enhancing' | 'generating' | 'saving' | 'complete' | 'error';
 
@@ -17,7 +18,9 @@ const AVAILABLE_MODELS = [
 
 export default function GeneratePage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user, userData, loading: authLoading, refreshUserData } = useAuth();
+    const { addGeneration, updateGeneration, removeGeneration, getGeneration, activeGenerations } = useActiveGenerations();
     const [step, setStep] = useState<GenerationStep>('idle');
     const [prompt, setPrompt] = useState('');
     const [inputPrompt, setInputPrompt] = useState('');
@@ -28,9 +31,28 @@ export default function GeneratePage() {
     const [streamingCode, setStreamingCode] = useState('');
     const [showCodePanel, setShowCodePanel] = useState(false);
     const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+    const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
     const hasStarted = useRef(false);
     const codeContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    const stopGeneration = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setStep('idle');
+        setIsGeneratingCode(false);
+        if (currentGenerationId) {
+            removeGeneration(currentGenerationId);
+            setCurrentGenerationId(null);
+        }
+        setMessages(prev => [...prev, {
+            role: 'system',
+            content: '⏹️ Generation stopped by user'
+        }]);
+    };
 
     // Auto-scroll code container when new code arrives
     useEffect(() => {
@@ -47,6 +69,75 @@ export default function GeneratePage() {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Resume generation from URL parameter
+    useEffect(() => {
+        const resumeId = searchParams.get('resume');
+        if (resumeId && !hasStarted.current) {
+            const generation = getGeneration(resumeId);
+            if (generation) {
+                hasStarted.current = true;
+                setCurrentGenerationId(resumeId);
+                setPrompt(generation.prompt);
+                setSelectedModel(generation.model);
+                setMessages([{ role: 'user', content: generation.prompt }]);
+
+                // Restore the step based on status
+                if (generation.status === 'enhancing') {
+                    setStep('enhancing');
+                } else if (generation.status === 'generating') {
+                    setStep('generating');
+                    setIsGeneratingCode(true);
+                } else if (generation.status === 'saving') {
+                    setStep('saving');
+                }
+
+                // Restore code if available
+                if (generation.code) {
+                    setStreamingCode(generation.code);
+                }
+            }
+        }
+    }, [searchParams, getGeneration]);
+
+    // Sync live updates from context for resumed generations
+    useEffect(() => {
+        if (!currentGenerationId) return;
+
+        const intervalId = setInterval(() => {
+            const generation = getGeneration(currentGenerationId);
+            if (generation) {
+                // Sync code
+                if (generation.code && generation.code !== streamingCode) {
+                    setStreamingCode(generation.code);
+                }
+
+                // Sync status
+                if (generation.status === 'enhancing' && step !== 'enhancing') {
+                    setStep('enhancing');
+                } else if (generation.status === 'generating' && step !== 'generating') {
+                    setStep('generating');
+                    setIsGeneratingCode(true);
+                } else if (generation.status === 'saving' && step !== 'saving') {
+                    setStep('saving');
+                    setIsGeneratingCode(false);
+                } else if (generation.status === 'complete' && step !== 'complete') {
+                    setStep('complete');
+                    setIsGeneratingCode(false);
+                    if (generation.projectId) {
+                        setTimeout(() => {
+                            router.push(`/editor/${generation.projectId}`);
+                        }, 2000);
+                    }
+                } else if (generation.status === 'error' && step !== 'error') {
+                    setStep('error');
+                    setIsGeneratingCode(false);
+                }
+            }
+        }, 200); // Poll every 200ms
+
+        return () => clearInterval(intervalId);
+    }, [currentGenerationId, getGeneration, step, streamingCode, router]);
 
     useEffect(() => {
         // Check if we have pending data from homepage
@@ -87,16 +178,32 @@ export default function GeneratePage() {
     };
 
     const generateProjectWithStream = async (promptText: string, userId: string, model: string) => {
+        // Create unique generation ID
+        const generationId = `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        setCurrentGenerationId(generationId);
+
+        // Register active generation
+        addGeneration({
+            id: generationId,
+            prompt: promptText,
+            model: model,
+            status: 'enhancing',
+        });
+
         try {
             setStep('analyzing');
             setStreamingCode('');
             setIsGeneratingCode(false);
             setError('');
 
+            // Create abort controller for this request
+            abortControllerRef.current = new AbortController();
+
             const response = await fetch('/api/projects/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: promptText, userId, model }),
+                signal: abortControllerRef.current.signal,
             });
 
             if (!response.ok) {
@@ -113,6 +220,7 @@ export default function GeneratePage() {
 
             let projectId = '';
             let buffer = '';
+            let accumulatedCode = ''; // Track full accumulated code for context
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -135,12 +243,15 @@ export default function GeneratePage() {
                                         case 'status':
                                             if (data.status === 'enhancing') {
                                                 setStep('enhancing');
+                                                updateGeneration(generationId, { status: 'enhancing' });
                                             } else if (data.status === 'generating') {
                                                 setStep('generating');
                                                 setIsGeneratingCode(true);
+                                                updateGeneration(generationId, { status: 'generating' });
                                             } else if (data.status === 'saving') {
                                                 setStep('saving');
                                                 setIsGeneratingCode(false);
+                                                updateGeneration(generationId, { status: 'saving' });
                                             }
                                             break;
 
@@ -161,13 +272,20 @@ export default function GeneratePage() {
                                             break;
 
                                         case 'code':
-                                            setStreamingCode(prev => prev + data.content);
+                                            accumulatedCode += data.content;
+                                            setStreamingCode(accumulatedCode);
+                                            updateGeneration(generationId, { code: accumulatedCode });
                                             break;
 
                                         case 'complete':
                                             projectId = data.projectId;
                                             await refreshUserData();
                                             setStep('complete');
+                                            updateGeneration(generationId, {
+                                                status: 'complete',
+                                                projectId: data.projectId,
+                                                code: data.code
+                                            });
                                             setTimeout(() => {
                                                 router.push(`/editor/${projectId}`);
                                             }, 2000);
@@ -177,6 +295,7 @@ export default function GeneratePage() {
                                             setError(data.error);
                                             setStep('error');
                                             setIsGeneratingCode(false);
+                                            updateGeneration(generationId, { status: 'error' });
                                             break;
                                     }
                                 }
@@ -193,6 +312,7 @@ export default function GeneratePage() {
             setStep('error');
             setError(err.message || 'Failed to generate website');
             setIsGeneratingCode(false);
+            updateGeneration(generationId, { status: 'error' });
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content: `❌ Error: ${err.message || 'Failed to generate website'}`
@@ -391,6 +511,20 @@ export default function GeneratePage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* Stop button - visible during generation */}
+                    {step !== 'idle' && step !== 'complete' && step !== 'error' && (
+                        <button
+                            onClick={stopGeneration}
+                            className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded text-sm flex items-center gap-1 hover:bg-red-500/30 transition-colors border border-red-500/30"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                            </svg>
+                            Stop
+                        </button>
+                    )}
+
                     {/* Code button - always visible during generation */}
                     <button
                         onClick={() => setShowCodePanel(!showCodePanel)}

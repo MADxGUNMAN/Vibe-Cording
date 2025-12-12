@@ -23,6 +23,15 @@ interface SelectedElement {
     xpath: string;
 }
 
+// Available models
+const AVAILABLE_MODELS = [
+    { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
+    { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
+    { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
+    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Groq model', provider: 'groq', tier: 'Fast', color: 'green' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
+];
+
 export default function EditorPage() {
     const params = useParams();
     const router = useRouter();
@@ -44,10 +53,13 @@ export default function EditorPage() {
     const [isTyping, setIsTyping] = useState(false);
     const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
     const [editMode, setEditMode] = useState(false);
+    const [selectedModel, setSelectedModel] = useState('z-ai/glm-4.5-air:free');
+    const [showModelDropdown, setShowModelDropdown] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const pendingCodeRef = useRef<string>('');  // Store pending changes without re-render
+    const codeContainerRef = useRef<HTMLDivElement>(null); // For auto-scroll
     const projectId = params.id as string;
 
     // Script to inject into iframe for element selection
@@ -235,6 +247,50 @@ export default function EditorPage() {
         return currentCode + script;
     }, [currentCode, editMode]);
 
+    // Inject base tag and link interceptor to prevent navigation to parent
+    const injectLinkHandler = useCallback((code: string) => {
+        if (!code) return code;
+
+        const linkInterceptorScript = `
+            <!-- VIBE_LINK_HANDLER_START -->
+            <base target="_self">
+            <script>
+            (function() {
+                // Intercept all link clicks to prevent parent navigation
+                document.addEventListener('click', function(e) {
+                    const link = e.target.closest('a');
+                    if (link) {
+                        const href = link.getAttribute('href');
+                        if (href) {
+                            if (href.startsWith('#')) {
+                                // Handle anchor links within the page
+                                e.preventDefault();
+                                const target = document.querySelector(href);
+                                if (target) {
+                                    target.scrollIntoView({ behavior: 'smooth' });
+                                }
+                            } else if (href !== 'javascript:void(0)' && !href.startsWith('javascript:')) {
+                                // Prevent external links from navigating parent
+                                e.preventDefault();
+                                console.log('Navigation prevented:', href);
+                            }
+                        }
+                    }
+                }, true);
+            })();
+            </script>
+            <!-- VIBE_LINK_HANDLER_END -->
+        `;
+
+        // Inject after <head> or at the start
+        if (code.includes('<head>')) {
+            return code.replace('<head>', '<head>' + linkInterceptorScript);
+        } else if (code.includes('<html>')) {
+            return code.replace('<html>', '<html><head>' + linkInterceptorScript + '</head>');
+        }
+        return linkInterceptorScript + code;
+    }, []);
+
     useEffect(() => {
         function handleMessage(e: MessageEvent) {
             if (e.data.type === 'elementSelected') {
@@ -299,6 +355,38 @@ export default function EditorPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    // Auto-scroll code container when new code arrives
+    useEffect(() => {
+        if (codeContainerRef.current && isTyping) {
+            requestAnimationFrame(() => {
+                if (codeContainerRef.current) {
+                    codeContainerRef.current.scrollTop = codeContainerRef.current.scrollHeight;
+                }
+            });
+        }
+    }, [displayedCode, isTyping]);
+
+    // Convert RGB/RGBA color to hex for color picker
+    const rgbToHex = (color: string): string => {
+        if (!color) return '#000000';
+        if (color.startsWith('#')) return color;
+
+        // Handle rgb() and rgba()
+        const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+            const r = parseInt(match[1]);
+            const g = parseInt(match[2]);
+            const b = parseInt(match[3]);
+            return '#' + [r, g, b].map(x => {
+                const hex = x.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+        }
+
+        // Handle color names - return as-is, browser will handle in text input
+        return '#000000';
+    };
+
     const handleElementUpdate = (field: keyof SelectedElement, value: string) => {
         if (!selectedElement) return;
 
@@ -347,6 +435,8 @@ export default function EditorPage() {
         const userMessage = input.trim();
         setInput('');
         setSending(true);
+        setShowCodePanel(true); // Auto-open code panel to show live updates
+        setIsTyping(true);
 
         const tempMessage: Message = {
             id: Date.now().toString(),
@@ -357,37 +447,116 @@ export default function EditorPage() {
         setMessages([...messages, tempMessage]);
 
         try {
-            const response = await fetch('/api/projects/revise', {
+            const response = await fetch('/api/projects/revise-stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     projectId,
                     message: userMessage,
                     userId: user.uid,
+                    model: selectedModel,
                 }),
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                throw new Error('Failed to revise project');
+            }
 
-            if (data.code) {
-                setCurrentCode(data.code);
-                setProject(prev => prev ? { ...prev, current_code: data.code } : prev);
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
 
-                const assistantMessage: Message = {
-                    id: (Date.now() + 1).toString(),
-                    role: 'assistant',
-                    content: 'I\'ve updated your website based on your request.',
-                    timestamp: Timestamp.now(),
-                };
-                setMessages(prev => [...prev, assistantMessage]);
+            if (!reader) {
+                throw new Error('No response stream');
+            }
 
-                const vers = await getVersions(projectId);
-                setVersions(vers);
+            let buffer = '';
+            let streamingCode = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const messages_arr = buffer.split('\n\n');
+                buffer = messages_arr.pop() || '';
+
+                for (const message of messages_arr) {
+                    const lines = message.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.slice(6);
+                                if (jsonStr.trim()) {
+                                    const data = JSON.parse(jsonStr);
+
+                                    switch (data.type) {
+                                        case 'status':
+                                            // Could show status indicator
+                                            break;
+
+                                        case 'message':
+                                            // Add status message to chat
+                                            setMessages(prev => [...prev, {
+                                                id: Date.now().toString(),
+                                                role: 'assistant' as const,
+                                                content: data.content,
+                                                timestamp: Timestamp.now(),
+                                            }]);
+                                            break;
+
+                                        case 'code':
+                                            // Live code streaming - update displayed code
+                                            streamingCode += data.content;
+                                            setDisplayedCode(streamingCode);
+                                            break;
+
+                                        case 'complete':
+                                            // Update with final clean code
+                                            setCurrentCode(data.code);
+                                            setDisplayedCode(data.code);
+                                            setProject(prev => prev ? { ...prev, current_code: data.code } : prev);
+
+                                            // Add completion message
+                                            setMessages(prev => [...prev, {
+                                                id: (Date.now() + 1).toString(),
+                                                role: 'assistant' as const,
+                                                content: 'I\'ve updated your website based on your request.',
+                                                timestamp: Timestamp.now(),
+                                            }]);
+
+                                            // Refresh versions
+                                            const vers = await getVersions(projectId);
+                                            setVersions(vers);
+                                            break;
+
+                                        case 'error':
+                                            setMessages(prev => [...prev, {
+                                                id: Date.now().toString(),
+                                                role: 'assistant' as const,
+                                                content: `❌ Error: ${data.error}`,
+                                                timestamp: Timestamp.now(),
+                                            }]);
+                                            break;
+                                    }
+                                }
+                            } catch (parseError) {
+                                console.log('Parse error:', parseError);
+                            }
+                        }
+                    }
+                }
             }
         } catch (error) {
             console.error('Error sending message:', error);
+            setMessages(prev => [...prev, {
+                id: Date.now().toString(),
+                role: 'assistant' as const,
+                content: '❌ Failed to update website. Please try again.',
+                timestamp: Timestamp.now(),
+            }]);
         } finally {
             setSending(false);
+            setIsTyping(false);
         }
     };
 
@@ -620,7 +789,55 @@ export default function EditorPage() {
                     </div>
 
                     {/* Input */}
-                    <div className="p-4 border-t border-white/10">
+                    <div className="p-4 border-t border-white/10 space-y-3">
+                        {/* Model Selector */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-left flex items-center justify-between hover:border-purple-500/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="text-gray-300 text-sm">
+                                        {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || 'Select Model'}
+                                    </span>
+                                </div>
+                                <svg className={`w-4 h-4 text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {showModelDropdown && (
+                                <div className="absolute bottom-full left-0 right-0 mb-1 py-1 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                                    {AVAILABLE_MODELS.map((model) => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => {
+                                                setSelectedModel(model.id);
+                                                setShowModelDropdown(false);
+                                            }}
+                                            className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors ${selectedModel === model.id ? 'bg-purple-600/20' : ''}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-gray-300 text-sm">{model.name}</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded ${model.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                                                    model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
+                                                        model.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                            'bg-green-500/20 text-green-400'
+                                                    }`}>
+                                                    {model.tier}
+                                                </span>
+                                            </div>
+                                            <p className="text-gray-500 text-xs">{model.description}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Input */}
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -661,7 +878,7 @@ export default function EditorPage() {
                     >
                         <iframe
                             ref={iframeRef}
-                            srcDoc={editMode ? injectEditScript() : currentCode}
+                            srcDoc={injectLinkHandler(editMode ? injectEditScript() : currentCode)}
                             className="w-full h-full"
                             sandbox="allow-scripts allow-same-origin"
                         />
@@ -669,15 +886,19 @@ export default function EditorPage() {
 
                     {/* Edit Element Panel */}
                     {showEditPanel && selectedElement && (
-                        <div className="absolute top-0 right-0 bottom-0 w-80 bg-[#12121a] border-l border-white/10 overflow-y-auto z-20">
-                            <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                                <h3 className="text-white font-medium">Edit Element</h3>
+                        <div className="absolute top-0 right-0 bottom-0 w-80 bg-[#0d0d14] border-l border-white/10 overflow-y-auto z-20">
+                            {/* Header */}
+                            <div className="sticky top-0 bg-[#0d0d14] p-4 border-b border-white/10 flex items-center justify-between z-10">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                    <h3 className="text-white font-semibold">Edit Element</h3>
+                                </div>
                                 <button
                                     onClick={() => {
                                         setShowEditPanel(false);
                                         setSelectedElement(null);
                                     }}
-                                    className="text-gray-400 hover:text-white"
+                                    className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -685,20 +906,28 @@ export default function EditorPage() {
                                 </button>
                             </div>
 
-                            <div className="p-4 space-y-4">
-                                {/* Tag info */}
-                                <div className="text-xs text-gray-500 uppercase tracking-wider">
+                            <div className="p-4 space-y-5">
+                                {/* Element Type Badge */}
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-600/20 text-purple-400 rounded-full text-xs font-medium">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                    </svg>
                                     &lt;{selectedElement.tagName}&gt;
                                 </div>
 
-                                {/* Text Content - show for elements that can have text */}
+                                {/* Text Content */}
                                 {selectedElement.hasText && (
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Text Content</label>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-gray-300 text-sm font-medium">
+                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                                            </svg>
+                                            Text Content
+                                        </label>
                                         <textarea
                                             value={selectedElement.textContent}
                                             onChange={(e) => handleElementUpdate('textContent', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50 resize-none"
+                                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 resize-none transition-all"
                                             rows={3}
                                             placeholder="Enter text content..."
                                         />
@@ -706,111 +935,158 @@ export default function EditorPage() {
                                 )}
 
                                 {/* Class Name */}
-                                <div>
-                                    <label className="block text-gray-400 text-sm mb-1">Class Name</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-gray-300 text-sm font-medium">
+                                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                        </svg>
+                                        Classes
+                                    </label>
                                     <input
                                         type="text"
                                         value={selectedElement.className}
                                         onChange={(e) => handleElementUpdate('className', e.target.value)}
-                                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50"
+                                        className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
                                     />
                                 </div>
 
                                 {/* Link href */}
                                 {selectedElement.tagName === 'a' && (
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Link URL</label>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-gray-300 text-sm font-medium">
+                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                            </svg>
+                                            Link URL
+                                        </label>
                                         <input
                                             type="text"
                                             value={selectedElement.href}
                                             onChange={(e) => handleElementUpdate('href', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50"
+                                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                                            placeholder="https://..."
                                         />
                                     </div>
                                 )}
 
                                 {/* Image src */}
                                 {selectedElement.tagName === 'img' && (
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Image URL</label>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-gray-300 text-sm font-medium">
+                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                            Image URL
+                                        </label>
                                         <input
                                             type="text"
                                             value={selectedElement.src}
                                             onChange={(e) => handleElementUpdate('src', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50"
+                                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                                            placeholder="https://..."
                                         />
                                     </div>
                                 )}
 
-                                {/* Padding & Margin */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Padding</label>
-                                        <input
-                                            type="text"
-                                            value={selectedElement.padding}
-                                            onChange={(e) => handleElementUpdate('padding', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50"
-                                            placeholder="0px"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Margin</label>
-                                        <input
-                                            type="text"
-                                            value={selectedElement.margin}
-                                            onChange={(e) => handleElementUpdate('margin', e.target.value)}
-                                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50"
-                                            placeholder="0px"
-                                        />
-                                    </div>
-                                </div>
+                                {/* Divider */}
+                                <div className="border-t border-white/5 pt-4">
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Spacing & Size</p>
 
-                                {/* Font Size */}
-                                <div>
-                                    <label className="block text-gray-400 text-sm mb-1">Font Size</label>
-                                    <input
-                                        type="text"
-                                        value={selectedElement.fontSize}
-                                        onChange={(e) => handleElementUpdate('fontSize', e.target.value)}
-                                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50"
-                                        placeholder="16px"
-                                    />
-                                </div>
-
-                                {/* Colors */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Background</label>
-                                        <div className="flex gap-2">
+                                    {/* Padding & Margin */}
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                        <div className="space-y-1.5">
+                                            <label className="text-gray-400 text-xs">Padding</label>
                                             <input
-                                                type="color"
-                                                value={selectedElement.backgroundColor.startsWith('rgb') ? '#ffffff' : selectedElement.backgroundColor}
-                                                onChange={(e) => handleElementUpdate('backgroundColor', e.target.value)}
-                                                className="w-10 h-10 rounded border border-white/10 bg-transparent cursor-pointer"
+                                                type="text"
+                                                value={selectedElement.padding}
+                                                onChange={(e) => handleElementUpdate('padding', e.target.value)}
+                                                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50 transition-all"
+                                                placeholder="0px"
                                             />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-gray-400 text-xs">Margin</label>
+                                            <input
+                                                type="text"
+                                                value={selectedElement.margin}
+                                                onChange={(e) => handleElementUpdate('margin', e.target.value)}
+                                                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50 transition-all"
+                                                placeholder="0px"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Font Size */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-gray-400 text-xs">Font Size</label>
+                                        <input
+                                            type="text"
+                                            value={selectedElement.fontSize}
+                                            onChange={(e) => handleElementUpdate('fontSize', e.target.value)}
+                                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50 transition-all"
+                                            placeholder="16px"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Colors Section */}
+                                <div className="border-t border-white/5 pt-4">
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Colors</p>
+
+                                    {/* Background Color */}
+                                    <div className="mb-4">
+                                        <label className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-2">
+                                            <div
+                                                className="w-4 h-4 rounded border border-white/20"
+                                                style={{ backgroundColor: rgbToHex(selectedElement.backgroundColor) }}
+                                            ></div>
+                                            Background
+                                        </label>
+                                        <div className="flex gap-2 items-center">
+                                            <div className="relative">
+                                                <input
+                                                    type="color"
+                                                    value={rgbToHex(selectedElement.backgroundColor)}
+                                                    onChange={(e) => handleElementUpdate('backgroundColor', e.target.value)}
+                                                    className="w-12 h-12 rounded-xl border-2 border-white/10 bg-transparent cursor-pointer appearance-none"
+                                                    style={{ padding: 0 }}
+                                                />
+                                            </div>
                                             <input
                                                 type="text"
                                                 value={selectedElement.backgroundColor}
                                                 onChange={(e) => handleElementUpdate('backgroundColor', e.target.value)}
-                                                className="flex-1 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs focus:outline-none focus:border-purple-500/50"
+                                                className="flex-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50 transition-all font-mono"
+                                                placeholder="#000000"
                                             />
                                         </div>
                                     </div>
+
+                                    {/* Text Color */}
                                     <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Text Color</label>
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="color"
-                                                value={selectedElement.color.startsWith('rgb') ? '#000000' : selectedElement.color}
-                                                onChange={(e) => handleElementUpdate('color', e.target.value)}
-                                                className="w-10 h-10 rounded border border-white/10 bg-transparent cursor-pointer"
-                                            />
+                                        <label className="flex items-center gap-2 text-gray-300 text-sm font-medium mb-2">
+                                            <div
+                                                className="w-4 h-4 rounded border border-white/20"
+                                                style={{ backgroundColor: rgbToHex(selectedElement.color) }}
+                                            ></div>
+                                            Text Color
+                                        </label>
+                                        <div className="flex gap-2 items-center">
+                                            <div className="relative">
+                                                <input
+                                                    type="color"
+                                                    value={rgbToHex(selectedElement.color)}
+                                                    onChange={(e) => handleElementUpdate('color', e.target.value)}
+                                                    className="w-12 h-12 rounded-xl border-2 border-white/10 bg-transparent cursor-pointer appearance-none"
+                                                    style={{ padding: 0 }}
+                                                />
+                                            </div>
                                             <input
                                                 type="text"
                                                 value={selectedElement.color}
                                                 onChange={(e) => handleElementUpdate('color', e.target.value)}
-                                                className="flex-1 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs focus:outline-none focus:border-purple-500/50"
+                                                className="flex-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500/50 transition-all font-mono"
+                                                placeholder="#000000"
                                             />
                                         </div>
                                     </div>
@@ -820,7 +1096,7 @@ export default function EditorPage() {
                                 <button
                                     onClick={handleSaveChanges}
                                     disabled={saving}
-                                    className="w-full mt-4 px-4 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    className="w-full mt-2 px-4 py-3.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-medium hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-500/20"
                                 >
                                     {saving ? (
                                         <>
@@ -876,97 +1152,99 @@ export default function EditorPage() {
                         </div>
                     )}
                 </div>
-            </div>
+            </div >
 
             {/* Code Viewer Modal */}
-            {showCodePanel && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[#0d1117] border border-white/10 rounded-xl w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl">
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between p-4 border-b border-white/10">
-                            <div className="flex items-center gap-3">
-                                <div className="flex gap-2">
-                                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                                </div>
-                                <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-lg">
-                                    <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    <span className="text-gray-300 text-sm font-mono">index.html</span>
-                                </div>
-                                {isTyping && (
-                                    <div className="flex items-center gap-2 text-purple-400 text-sm">
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                                        Writing code...
+            {
+                showCodePanel && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-[#0d1117] border border-white/10 rounded-xl w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl">
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between p-4 border-b border-white/10">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
                                     </div>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(currentCode);
-                                        alert('Code copied to clipboard!');
-                                    }}
-                                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                    Copy
-                                </button>
-                                <button
-                                    onClick={() => setShowCodePanel(false)}
-                                    className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Code Content */}
-                        <div className="flex-1 overflow-auto p-4 font-mono text-sm">
-                            <pre className="text-gray-300">
-                                <code>
-                                    {displayedCode.split('\n').map((line, i) => {
-                                        // Simple syntax highlighting
-                                        const highlightedLine = line
-                                            .replace(/(&lt;)/g, '<span class="text-pink-400">&lt;</span>')
-                                            .replace(/(&gt;)/g, '<span class="text-pink-400">&gt;</span>')
-                                            .replace(/(class|className|id|href|src|alt|style|type|name|value|placeholder)=/g, '<span class="text-purple-400">$1</span>=')
-                                            .replace(/="([^"]*)"/g, '="<span class="text-green-400">$1</span>"');
-
-                                        return (
-                                            <div key={i} className="flex hover:bg-white/5 leading-6">
-                                                <span className="select-none w-12 text-right pr-4 text-gray-600 border-r border-white/10 mr-4 flex-shrink-0">
-                                                    {i + 1}
-                                                </span>
-                                                <span className="flex-1 whitespace-pre-wrap break-all">{line}</span>
-                                            </div>
-                                        );
-                                    })}
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-lg">
+                                        <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span className="text-gray-300 text-sm font-mono">index.html</span>
+                                    </div>
                                     {isTyping && (
-                                        <span className="inline-block w-2 h-5 bg-purple-400 animate-pulse ml-1"></span>
+                                        <div className="flex items-center gap-2 text-purple-400 text-sm">
+                                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                                            Writing code...
+                                        </div>
                                     )}
-                                </code>
-                            </pre>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="flex items-center justify-between p-4 border-t border-white/10 bg-white/5">
-                            <div className="text-gray-500 text-sm">
-                                {currentCode.split('\n').length} lines • {currentCode.length} characters
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(currentCode);
+                                            alert('Code copied to clipboard!');
+                                        }}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        Copy
+                                    </button>
+                                    <button
+                                        onClick={() => setShowCodePanel(false)}
+                                        className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
-                            <div className="text-gray-500 text-sm">
-                                HTML
+
+                            {/* Code Content */}
+                            <div ref={codeContainerRef} className="flex-1 overflow-auto p-4 font-mono text-sm">
+                                <pre className="text-gray-300">
+                                    <code>
+                                        {displayedCode.split('\n').map((line, i) => {
+                                            // Simple syntax highlighting
+                                            const highlightedLine = line
+                                                .replace(/(&lt;)/g, '<span class="text-pink-400">&lt;</span>')
+                                                .replace(/(&gt;)/g, '<span class="text-pink-400">&gt;</span>')
+                                                .replace(/(class|className|id|href|src|alt|style|type|name|value|placeholder)=/g, '<span class="text-purple-400">$1</span>=')
+                                                .replace(/="([^"]*)"/g, '="<span class="text-green-400">$1</span>"');
+
+                                            return (
+                                                <div key={i} className="flex hover:bg-white/5 leading-6">
+                                                    <span className="select-none w-12 text-right pr-4 text-gray-600 border-r border-white/10 mr-4 flex-shrink-0">
+                                                        {i + 1}
+                                                    </span>
+                                                    <span className="flex-1 whitespace-pre-wrap break-all">{line}</span>
+                                                </div>
+                                            );
+                                        })}
+                                        {isTyping && (
+                                            <span className="inline-block w-2 h-5 bg-purple-400 animate-pulse ml-1"></span>
+                                        )}
+                                    </code>
+                                </pre>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="flex items-center justify-between p-4 border-t border-white/10 bg-white/5">
+                                <div className="text-gray-500 text-sm">
+                                    {currentCode.split('\n').length} lines • {currentCode.length} characters
+                                </div>
+                                <div className="text-gray-500 text-sm">
+                                    HTML
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

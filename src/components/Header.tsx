@@ -2,11 +2,15 @@
 
 import Link from 'next/link';
 import { useAuth } from './AuthProvider';
+import { useActiveGenerations } from './ActiveGenerationsProvider';
 import { useState } from 'react';
 
 export default function Header() {
     const { user, userData, loading, signOut } = useAuth();
+    const { activeGenerations } = useActiveGenerations();
     const [showDropdown, setShowDropdown] = useState(false);
+
+    const ongoingCount = activeGenerations.filter(g => g.status !== 'complete' && g.status !== 'error').length;
 
     return (
         <header className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0f]/80 backdrop-blur-md border-b border-white/5">
@@ -35,6 +39,32 @@ export default function Header() {
                         </Link>
                         <Link href="/pricing" className="text-gray-300 hover:text-white transition-colors text-sm">
                             Pricing
+                        </Link>
+                        <a
+                            href="https://ansarisouaib.in"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-300 hover:text-white transition-colors text-sm flex items-center gap-1"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            Developer
+                        </a>
+                        {/* Active Generations Button */}
+                        <Link
+                            href="/active"
+                            className="relative text-gray-300 hover:text-white transition-colors text-sm flex items-center gap-1"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Active
+                            {ongoingCount > 0 && (
+                                <span className="absolute -top-2 -right-3 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                                    {ongoingCount}
+                                </span>
+                            )}
                         </Link>
                         <Link
                             href="/generate"

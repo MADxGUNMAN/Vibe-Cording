@@ -44,6 +44,18 @@ export default function ProjectsPage() {
         });
     };
 
+    const getModelDisplayName = (modelId?: string) => {
+        if (!modelId) return null;
+        const modelNames: Record<string, string> = {
+            'z-ai/glm-4.5-air:free': 'GLM 4.5 Air',
+            'openai/gpt-oss-120b': 'GPT OSS 120B',
+            'openai/gpt-oss-20b': 'GPT OSS 20B',
+            'llama-3.3-70b-versatile': 'Llama 3.3 70B',
+            'llama-3.1-8b-instant': 'Llama 3.1 8B',
+        };
+        return modelNames[modelId] || modelId.split('/').pop()?.split(':')[0] || modelId;
+    };
+
     if (authLoading || loading) {
         return (
             <div className="min-h-screen gradient-bg flex items-center justify-center">
@@ -142,10 +154,20 @@ export default function ProjectsPage() {
                                     <p className="text-gray-500 text-xs line-clamp-2 mb-3">
                                         {project.initial_prompt}
                                     </p>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between mb-3">
                                         <span className="text-gray-500 text-xs">
                                             {project.createdAt && formatDate(project.createdAt)}
                                         </span>
+                                        {project.model && (
+                                            <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 text-xs rounded flex items-center gap-1">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                </svg>
+                                                {getModelDisplayName(project.model)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-full">
                                             {user.photoURL ? (
                                                 <img src={user.photoURL} className="w-4 h-4 rounded-full" alt="" />
