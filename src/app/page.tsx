@@ -1,65 +1,226 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
+
+// Available models
+const AVAILABLE_MODELS = [
+  { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
+  { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
+  { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Groq model', provider: 'groq', tier: 'Fast', color: 'green' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
+];
+
+export default function HomePage() {
+  const [prompt, setPrompt] = useState('');
+  const [selectedModel, setSelectedModel] = useState('z-ai/glm-4.5-air:free');
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const handleCreate = async () => {
+    if (!prompt.trim()) return;
+
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    // Store prompt and selected model in sessionStorage and redirect to generate page
+    sessionStorage.setItem('pendingPrompt', prompt.trim());
+    sessionStorage.setItem('pendingUserId', user.uid);
+    sessionStorage.setItem('pendingModel', selectedModel);
+    router.push('/generate');
+  };
+
+  const getSelectedModelName = () => {
+    const model = AVAILABLE_MODELS.find(m => m.id === selectedModel);
+    return model?.name || 'Select Model';
+  };
+
+  const getSelectedModel = () => {
+    return AVAILABLE_MODELS.find(m => m.id === selectedModel);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen gradient-bg">
+      {/* Hero Section */}
+      <div className="max-w-5xl mx-auto px-4 pt-24 pb-16 text-center">
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-8">
+          <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded">NEW</span>
+          <span className="text-gray-300 text-sm">Try 30 days free trial option</span>
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {/* Main heading */}
+        <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
+          Turn thoughts into websites
+          <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">
+            instantly, with AI.
+          </span>
+        </h1>
+
+        {/* Subtitle */}
+        <p className="text-gray-400 text-lg md:text-xl mb-8 max-w-2xl mx-auto">
+          Create, customize and publish website faster than ever with our
+          <br className="hidden md:block" /> AI Site Builder.
+        </p>
+
+        {/* Model Selector */}
+        <div className="max-w-2xl mx-auto mb-4">
+          <div className="relative">
+            <button
+              onClick={() => setShowModelDropdown(!showModelDropdown)}
+              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-xl text-white flex items-center justify-between hover:border-purple-500/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getSelectedModel()?.color === 'red' ? 'bg-gradient-to-br from-red-500 to-red-700' :
+                    getSelectedModel()?.color === 'orange' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
+                      getSelectedModel()?.color === 'yellow' ? 'bg-gradient-to-br from-yellow-500 to-yellow-700' :
+                        'bg-gradient-to-br from-green-500 to-green-700'
+                  }`}>
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{getSelectedModelName()}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${getSelectedModel()?.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                        getSelectedModel()?.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
+                          getSelectedModel()?.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-green-500/20 text-green-400'
+                      }`}>
+                      {getSelectedModel()?.tier}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {getSelectedModel()?.description}
+                  </div>
+                </div>
+              </div>
+              <svg className={`w-5 h-5 text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showModelDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl">
+                {AVAILABLE_MODELS.map((model) => (
+                  <button
+                    key={model.id}
+                    onClick={() => {
+                      setSelectedModel(model.id);
+                      setShowModelDropdown(false);
+                    }}
+                    className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${selectedModel === model.id ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${model.color === 'red' ? 'bg-red-500' :
+                          model.color === 'orange' ? 'bg-orange-500' :
+                            model.color === 'yellow' ? 'bg-yellow-500' :
+                              'bg-green-500'
+                        }`}></div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-medium">{model.name}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${model.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                              model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
+                                model.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-green-500/20 text-green-400'
+                            }`}>
+                            {model.tier}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-500">{model.description}</div>
+                      </div>
+                    </div>
+                    {selectedModel === model.id && (
+                      <svg className="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Prompt Input */}
+        <div className="max-w-2xl mx-auto mb-16">
+          <div className="relative bg-[#1a1a2e] border border-white/10 rounded-xl p-4 focus-within:border-purple-500/50 transition-colors">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Describe your website in details..."
+              className="w-full h-24 bg-transparent text-white placeholder-gray-500 resize-none focus:outline-none text-sm md:text-base"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <div className="flex justify-end">
+              <button
+                onClick={handleCreate}
+                disabled={!prompt.trim()}
+                className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg font-medium text-sm hover:from-purple-700 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                Create with AI
+              </button>
+            </div>
+          </div>
         </div>
-      </main>
+
+        {/* Brand logos */}
+        <div className="border-t border-white/5 pt-12">
+          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12 opacity-50">
+            {/* Framer */}
+            <div className="flex items-center gap-2 text-white">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 0h16v8h-8zM4 8h8l8 8H4zM4 16h8v8z" />
+              </svg>
+              <span className="font-semibold">Framer</span>
+            </div>
+
+            {/* HUAWEI */}
+            <div className="flex items-center gap-2 text-white">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2a10 10 0 0110 10h-4a6 6 0 00-6-6V2z" />
+              </svg>
+              <span className="font-semibold">HUAWEI</span>
+            </div>
+
+            {/* Instagram */}
+            <div className="text-white font-serif text-xl italic">
+              Instagram
+            </div>
+
+            {/* Microsoft */}
+            <div className="flex items-center gap-2 text-white">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="1" y="1" width="10" height="10" />
+                <rect x="13" y="1" width="10" height="10" />
+                <rect x="1" y="13" width="10" height="10" />
+                <rect x="13" y="13" width="10" height="10" />
+              </svg>
+              <span className="font-semibold">Microsoft</span>
+            </div>
+
+            {/* Walmart */}
+            <div className="flex items-center gap-2 text-white">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l2 6h-4l2-6zm0 20l-2-6h4l-2 6zm-10-10l6-2v4l-6-2zm20 0l-6 2v-4l6 2zm-15.66-5.66l4.24 4.24-2.83 2.83-4.24-4.24zm11.32 11.32l-4.24-4.24 2.83-2.83 4.24 4.24z" />
+              </svg>
+              <span className="font-semibold">Walmart</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
