@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useActiveGenerations } from '@/components/ActiveGenerationsProvider';
@@ -16,7 +16,28 @@ const AVAILABLE_MODELS = [
     { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
 ];
 
+// Loading component for Suspense fallback
+function GeneratePageLoading() {
+    return (
+        <div className="min-h-screen gradient-bg flex items-center justify-center">
+            <div className="text-center">
+                <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-400">Loading...</p>
+            </div>
+        </div>
+    );
+}
+
+// Main page wrapper with Suspense
 export default function GeneratePage() {
+    return (
+        <Suspense fallback={<GeneratePageLoading />}>
+            <GeneratePageContent />
+        </Suspense>
+    );
+}
+
+function GeneratePageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, userData, loading: authLoading, refreshUserData } = useAuth();
