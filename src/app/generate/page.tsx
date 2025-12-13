@@ -55,6 +55,7 @@ function GeneratePageContent() {
     const [messages, setMessages] = useState<{ role: 'user' | 'assistant' | 'system'; content: string }[]>([]);
     const [streamingCode, setStreamingCode] = useState('');
     const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
+    const [isChatVisible, setIsChatVisible] = useState(true);
     const [isCodeFullscreen, setIsCodeFullscreen] = useState(false);
     const [isGeneratingCode, setIsGeneratingCode] = useState(false);
     const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
@@ -523,9 +524,9 @@ function GeneratePageContent() {
     }
 
     return (
-        <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
+        <div className="bg-[#0a0a0f] flex flex-col" style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
             {/* Top bar */}
-            <div className="h-14 border-b border-white/10 flex items-center justify-between px-4">
+            <div className="h-14 border-b border-white/10 flex items-center justify-between px-2 md:px-4 gap-2 overflow-x-auto scrollbar-thin">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
@@ -617,11 +618,23 @@ function GeneratePageContent() {
             </div>
 
             {/* Main content - Split view */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Chat Panel */}
-                <div className="w-[350px] border-r border-white/10 flex flex-col bg-[#12121a]">
-                    {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 flex overflow-hidden relative min-h-0">
+                {/* Chat Toggle Button - Always visible, positioned at chat edge */}
+                <button
+                    onClick={() => setIsChatVisible(!isChatVisible)}
+                    className={`absolute top-1/2 -translate-y-1/2 z-30 w-6 h-14 bg-purple-600/80 hover:bg-purple-600 border border-purple-500/50 rounded-r-lg flex items-center justify-center text-white transition-all shadow-lg ${isChatVisible ? 'left-[280px] md:left-[350px]' : 'left-0'}`}
+                    style={{ transition: 'left 0.3s ease-in-out' }}
+                    title={isChatVisible ? 'Hide Chat' : 'Show Chat'}
+                >
+                    <svg className={`w-4 h-4 transition-transform duration-300 ${isChatVisible ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+
+                {/* Chat Panel - Collapsible */}
+                <div className={`${isChatVisible ? 'w-[280px] md:w-[350px]' : 'w-0'} border-r border-white/10 flex flex-col bg-[#12121a] transition-all duration-300 overflow-hidden flex-shrink-0 min-h-0`}>
+                    {/* Messages - Scrollable area */}
+                    <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 min-h-0">
                         {messages.map((message, index) => (
                             <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 {message.role === 'user' ? (
@@ -777,10 +790,17 @@ function GeneratePageContent() {
                         <div className="flex-1 flex flex-col overflow-hidden">
                             {streamingCode ? (
                                 /* Show live preview when code is available */
-                                <div className="flex-1 bg-white rounded-lg m-2 overflow-hidden relative">
+                                <div
+                                    className="flex-1 bg-white rounded-lg m-2 overflow-hidden relative"
+                                    style={{
+                                        transform: 'scale(0.85)',
+                                        transformOrigin: 'top center',
+                                    }}
+                                >
                                     <iframe
                                         srcDoc={streamingCode}
-                                        className="w-full h-full border-0"
+                                        className="w-full border-0"
+                                        style={{ height: '118%' }}
                                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                                         title="Website Preview"
                                     />

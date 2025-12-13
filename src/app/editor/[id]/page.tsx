@@ -50,6 +50,7 @@ export default function EditorPage() {
     const [sending, setSending] = useState(false);
     const [saving, setSaving] = useState(false);
     const [device, setDevice] = useState<DeviceType>('desktop');
+    const [isChatVisible, setIsChatVisible] = useState(true);
     const [showVersions, setShowVersions] = useState(false);
     const [showEditPanel, setShowEditPanel] = useState(false);
     const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
@@ -629,91 +630,170 @@ export default function EditorPage() {
     }
 
     return (
-        <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
+        <div className="bg-[#0a0a0f] flex flex-col" style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
             {/* Top bar */}
-            <div className="h-14 border-b border-white/10 flex items-center justify-between px-4">
-                <div className="flex items-center gap-4">
+            <div
+                className="h-14 border-b border-white/10 flex items-center justify-between px-2 md:px-4 gap-2 overflow-x-auto scrollbar-thin"
+                style={{
+                    WebkitOverflowScrolling: 'touch',
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#6b21a8 transparent'
+                }}
+            >
+                {/* Left side - Back button + Title + Conditional buttons when chat is hidden */}
+                <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                         onClick={() => router.push('/projects')}
-                        className="p-2 text-gray-400 hover:text-white transition-colors"
+                        className="p-2 text-gray-400 hover:text-white transition-colors flex-shrink-0"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                         </svg>
                     </button>
-                    <h1 className="text-white font-medium truncate max-w-[200px]">{project.name}</h1>
+                    <h1 className="text-white font-medium truncate max-w-[100px] md:max-w-[200px]">{project.name}</h1>
+
+                    {/* Show Edit and Device buttons on left when chat is hidden (for mobile/tablet) */}
+                    {!isChatVisible && (
+                        <>
+                            <div className="w-px h-6 bg-white/10 hidden md:block" />
+
+                            {/* Edit Mode Toggle */}
+                            <button
+                                onClick={() => {
+                                    setEditMode(!editMode);
+                                    if (editMode) {
+                                        setShowEditPanel(false);
+                                        setSelectedElement(null);
+                                    }
+                                }}
+                                className={`px-2 md:px-3 py-1.5 rounded text-sm flex items-center gap-1 transition-colors flex-shrink-0 ${editMode ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-300 hover:text-white'}`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <span className="hidden md:inline">{editMode ? 'Editing' : 'Edit'}</span>
+                            </button>
+
+                            {/* Device toggles */}
+                            <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg flex-shrink-0">
+                                <button
+                                    onClick={() => setDevice('mobile')}
+                                    className={`p-1.5 md:p-2 rounded ${device === 'mobile' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    title="Mobile"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setDevice('tablet')}
+                                    className={`p-1.5 md:p-2 rounded ${device === 'tablet' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    title="Tablet"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setDevice('desktop')}
+                                    className={`p-1.5 md:p-2 rounded ${device === 'desktop' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    title="Desktop"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="w-px h-6 bg-white/10 hidden md:block" />
+
+                            {/* History button */}
+                            <button
+                                onClick={() => setShowVersions(!showVersions)}
+                                className="px-2 md:px-3 py-1.5 text-gray-300 hover:text-white text-sm flex items-center gap-1 flex-shrink-0"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="hidden md:inline">History</span>
+                            </button>
+                        </>
+                    )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {/* Edit Mode Toggle */}
-                    <button
-                        onClick={() => {
-                            setEditMode(!editMode);
-                            if (editMode) {
-                                setShowEditPanel(false);
-                                setSelectedElement(null);
-                            }
-                        }}
-                        className={`px-3 py-1.5 rounded text-sm flex items-center gap-1 transition-colors ${editMode ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-300 hover:text-white'
-                            }`}
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                        {editMode ? 'Editing' : 'Edit'}
-                    </button>
+                {/* Right side - Main action buttons (always visible, but conditionally show Edit/Device when chat is visible) */}
+                <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+                    {/* Only show these when chat IS visible (desktop view by default) */}
+                    {isChatVisible && (
+                        <>
+                            {/* Edit Mode Toggle */}
+                            <button
+                                onClick={() => {
+                                    setEditMode(!editMode);
+                                    if (editMode) {
+                                        setShowEditPanel(false);
+                                        setSelectedElement(null);
+                                    }
+                                }}
+                                className={`px-2 md:px-3 py-1.5 rounded text-sm flex items-center gap-1 transition-colors flex-shrink-0 ${editMode ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-300 hover:text-white'}`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <span className="hidden md:inline">{editMode ? 'Editing' : 'Edit'}</span>
+                            </button>
 
-                    <div className="w-px h-6 bg-white/10" />
+                            {/* Device toggles */}
+                            <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg flex-shrink-0">
+                                <button
+                                    onClick={() => setDevice('mobile')}
+                                    className={`p-1.5 md:p-2 rounded ${device === 'mobile' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    title="Mobile"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setDevice('tablet')}
+                                    className={`p-1.5 md:p-2 rounded ${device === 'tablet' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    title="Tablet"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setDevice('desktop')}
+                                    className={`p-1.5 md:p-2 rounded ${device === 'desktop' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    title="Desktop"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                            </div>
 
-                    {/* Device toggles */}
-                    <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg">
-                        <button
-                            onClick={() => setDevice('mobile')}
-                            className={`p-2 rounded ${device === 'mobile' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            title="Mobile"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                        </button>
-                        <button
-                            onClick={() => setDevice('tablet')}
-                            className={`p-2 rounded ${device === 'tablet' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            title="Tablet"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                        </button>
-                        <button
-                            onClick={() => setDevice('desktop')}
-                            className={`p-2 rounded ${device === 'desktop' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                            title="Desktop"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                        </button>
-                    </div>
+                            <div className="w-px h-6 bg-white/10 hidden md:block" />
 
-                    <div className="w-px h-6 bg-white/10" />
+                            {/* History button */}
+                            <button
+                                onClick={() => setShowVersions(!showVersions)}
+                                className="px-2 md:px-3 py-1.5 text-gray-300 hover:text-white text-sm flex items-center gap-1 flex-shrink-0"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="hidden md:inline">History</span>
+                            </button>
+                        </>
+                    )}
 
-                    {/* Action buttons */}
-                    <button
-                        onClick={() => setShowVersions(!showVersions)}
-                        className="px-3 py-1.5 text-gray-300 hover:text-white text-sm flex items-center gap-1"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        History
-                    </button>
-
-                    {/* Preview/Code Toggle Tabs */}
-                    <div className="flex items-center bg-white/5 rounded-lg p-1">
+                    {/* Preview/Code Toggle Tabs - Always visible */}
+                    <div className="flex items-center bg-white/5 rounded-lg p-1 flex-shrink-0">
                         <button
                             onClick={() => setActiveTab('preview')}
-                            className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-all ${activeTab === 'preview'
+                            className={`px-2 md:px-4 py-1.5 rounded text-sm font-medium flex items-center gap-1 md:gap-2 transition-all ${activeTab === 'preview'
                                 ? 'bg-white/10 text-white'
                                 : 'text-gray-400 hover:text-white'
                                 }`}
@@ -721,14 +801,18 @@ export default function EditorPage() {
                             {activeTab === 'preview' && (
                                 <span className="w-2 h-2 bg-white rounded-full"></span>
                             )}
-                            Preview
+                            <span className="hidden md:inline">Preview</span>
+                            <svg className="w-4 h-4 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
                         </button>
                         <button
                             onClick={() => {
                                 setActiveTab('code');
                                 setDisplayedCode(currentCode);
                             }}
-                            className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-all ${activeTab === 'code'
+                            className={`px-2 md:px-4 py-1.5 rounded text-sm font-medium flex items-center gap-1 md:gap-2 transition-all ${activeTab === 'code'
                                 ? 'bg-white/10 text-white'
                                 : 'text-gray-400 hover:text-white'
                                 }`}
@@ -736,7 +820,10 @@ export default function EditorPage() {
                             {activeTab === 'code' && (
                                 <span className="w-2 h-2 bg-white rounded-full"></span>
                             )}
-                            Code
+                            <span className="hidden md:inline">Code</span>
+                            <svg className="w-4 h-4 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
                             {isTyping && (
                                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
                             )}
@@ -746,47 +833,59 @@ export default function EditorPage() {
                     {/* New Tab button */}
                     <button
                         onClick={handlePreview}
-                        className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm flex items-center gap-2 hover:bg-blue-500/30 transition-colors border border-blue-500/30"
+                        className="px-2 md:px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm flex items-center gap-1 md:gap-2 hover:bg-blue-500/30 transition-colors border border-blue-500/30 flex-shrink-0"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
-                        New Tab
+                        <span className="hidden md:inline">New Tab</span>
                     </button>
 
                     <button
                         onClick={handleDownload}
-                        className="px-3 py-1.5 bg-white/5 text-gray-300 hover:text-white rounded text-sm flex items-center gap-1"
+                        className="px-2 md:px-3 py-1.5 bg-white/5 text-gray-300 hover:text-white rounded text-sm flex items-center gap-1 flex-shrink-0"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
-                        Download
+                        <span className="hidden md:inline">Download</span>
                     </button>
                     <button
                         onClick={handlePublish}
                         disabled={project.isPublished}
-                        className="px-3 py-1.5 bg-purple-600 text-white rounded text-sm flex items-center gap-1 hover:bg-purple-700 disabled:opacity-50"
+                        className="px-2 md:px-3 py-1.5 bg-purple-600 text-white rounded text-sm flex items-center gap-1 hover:bg-purple-700 disabled:opacity-50 flex-shrink-0"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                         </svg>
-                        {project.isPublished ? 'Published' : 'Publish'}
+                        <span className="hidden md:inline">{project.isPublished ? 'Published' : 'Publish'}</span>
                     </button>
                 </div>
             </div>
 
             {/* Main content - Split view */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Chat Panel */}
-                <div className="w-[350px] border-r border-white/10 flex flex-col bg-[#12121a]">
+            <div className="flex-1 flex overflow-hidden relative min-h-0">
+                {/* Chat Toggle Button - Always visible, positioned at chat edge */}
+                <button
+                    onClick={() => setIsChatVisible(!isChatVisible)}
+                    className={`absolute top-1/2 -translate-y-1/2 z-30 w-6 h-14 bg-purple-600/80 hover:bg-purple-600 border border-purple-500/50 rounded-r-lg flex items-center justify-center text-white transition-all shadow-lg ${isChatVisible ? 'left-[280px] md:left-[350px]' : 'left-0'}`}
+                    style={{ transition: 'left 0.3s ease-in-out' }}
+                    title={isChatVisible ? 'Hide Chat' : 'Show Chat'}
+                >
+                    <svg className={`w-4 h-4 transition-transform duration-300 ${isChatVisible ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+
+                {/* Chat Panel - Collapsible */}
+                <div className={`${isChatVisible ? 'w-[280px] md:w-[350px]' : 'w-0'} border-r border-white/10 flex flex-col bg-[#12121a] transition-all duration-300 overflow-hidden flex-shrink-0 min-h-0`}>
                     {/* Chat header */}
-                    <div className="p-4 border-b border-white/10">
-                        <h2 className="text-white font-medium">Chat</h2>
+                    <div className="p-3 md:p-4 border-b border-white/10 flex-shrink-0">
+                        <h2 className="text-white font-medium text-sm md:text-base">Chat</h2>
                     </div>
 
-                    {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {/* Messages - Scrollable area */}
+                    <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 min-h-0">
                         {messages.map((message) => (
                             <div
                                 key={message.id}
@@ -816,72 +915,70 @@ export default function EditorPage() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    {/* Input */}
-                    <div className="p-4 border-t border-white/10 space-y-3">
-                        {/* Model Selector */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-left flex items-center justify-between hover:border-purple-500/50 transition-colors"
-                            >
-                                <div className="flex items-center gap-2">
+                    {/* Input - Single compact row */}
+                    <div className="p-2 border-t border-white/10 flex-shrink-0 overflow-hidden">
+                        <div className="flex gap-1 items-center">
+                            {/* Compact Model Selector */}
+                            <div className="relative flex-shrink-0">
+                                <button
+                                    onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                    className="p-2 bg-white/5 border border-white/10 rounded-lg flex items-center gap-1 hover:border-purple-500/50 transition-colors"
+                                    title={AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || 'Select Model'}
+                                >
                                     <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                     </svg>
-                                    <span className="text-gray-300 text-sm">
-                                        {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || 'Select Model'}
-                                    </span>
-                                </div>
-                                <svg className={`w-4 h-4 text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                            </button>
+                                    <svg className={`w-3 h-3 text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
 
-                            {showModelDropdown && (
-                                <div className="absolute bottom-full left-0 right-0 mb-1 py-1 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-                                    {AVAILABLE_MODELS.map((model) => (
-                                        <button
-                                            key={model.id}
-                                            onClick={() => {
-                                                setSelectedModel(model.id);
-                                                setShowModelDropdown(false);
-                                            }}
-                                            className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors ${selectedModel === model.id ? 'bg-purple-600/20' : ''}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-gray-300 text-sm">{model.name}</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded ${model.color === 'red' ? 'bg-red-500/20 text-red-400' :
-                                                    model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
-                                                        model.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                            'bg-green-500/20 text-green-400'
-                                                    }`}>
-                                                    {model.tier}
-                                                </span>
-                                            </div>
-                                            <p className="text-gray-500 text-xs">{model.description}</p>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                {showModelDropdown && (
+                                    <div className="absolute bottom-full left-0 mb-1 py-1 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto w-48">
+                                        {AVAILABLE_MODELS.map((model) => (
+                                            <button
+                                                key={model.id}
+                                                onClick={() => {
+                                                    setSelectedModel(model.id);
+                                                    setShowModelDropdown(false);
+                                                }}
+                                                className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors ${selectedModel === model.id ? 'bg-purple-600/20' : ''}`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-gray-300 text-sm">{model.name}</span>
+                                                    <span className={`text-xs px-2 py-0.5 rounded ${model.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                                                        model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
+                                                            model.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                                'bg-green-500/20 text-green-400'
+                                                        }`}>
+                                                        {model.tier}
+                                                    </span>
+                                                </div>
+                                                <p className="text-gray-500 text-xs">{model.description}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
-                        {/* Input */}
-                        <div className="flex gap-2">
+                            {/* Text Input */}
                             <input
                                 type="text"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyPress={handleKeyPress}
-                                placeholder="Describe changes..."
-                                className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                                placeholder="Describe..."
+                                className="flex-1 min-w-0 px-2 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
                                 disabled={sending}
                             />
+
+                            {/* Send Button */}
                             <button
                                 onClick={handleSend}
                                 disabled={!input.trim() || sending}
-                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                 </svg>
                             </button>
@@ -983,12 +1080,17 @@ export default function EditorPage() {
                                 style={{
                                     width: getDeviceWidth(),
                                     height: device === 'desktop' ? '100%' : '90%',
+                                    transform: device === 'mobile' ? 'scale(0.75)' : device === 'tablet' ? 'scale(0.85)' : 'scale(1)',
+                                    transformOrigin: 'top center',
                                 }}
                             >
                                 <iframe
                                     ref={iframeRef}
                                     srcDoc={injectLinkHandler(editMode ? injectEditScript() : currentCode)}
                                     className="w-full h-full"
+                                    style={{
+                                        height: device === 'mobile' ? '133%' : device === 'tablet' ? '118%' : '100%',
+                                    }}
                                     sandbox="allow-scripts allow-same-origin"
                                 />
                             </div>
