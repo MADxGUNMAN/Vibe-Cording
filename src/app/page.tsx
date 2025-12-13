@@ -6,6 +6,10 @@ import { useAuth } from '@/components/AuthProvider';
 
 // Available models
 const AVAILABLE_MODELS = [
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'blue' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Powerful', color: 'blue' },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Stable Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
+  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight Gemini', provider: 'gemini', tier: 'Fast', color: 'blue' },
   { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
   { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
   { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
@@ -15,7 +19,7 @@ const AVAILABLE_MODELS = [
 
 export default function HomePage() {
   const [prompt, setPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState('z-ai/glm-4.5-air:free');
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
@@ -80,7 +84,8 @@ export default function HomePage() {
               className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-xl text-white flex items-center justify-between hover:border-purple-500/50 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getSelectedModel()?.color === 'red' ? 'bg-gradient-to-br from-red-500 to-red-700' :
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getSelectedModel()?.color === 'blue' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+                  getSelectedModel()?.color === 'red' ? 'bg-gradient-to-br from-red-500 to-red-700' :
                     getSelectedModel()?.color === 'orange' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
                       getSelectedModel()?.color === 'yellow' ? 'bg-gradient-to-br from-yellow-500 to-yellow-700' :
                         'bg-gradient-to-br from-green-500 to-green-700'
@@ -92,7 +97,8 @@ export default function HomePage() {
                 <div className="text-left">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{getSelectedModelName()}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getSelectedModel()?.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${getSelectedModel()?.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
+                      getSelectedModel()?.color === 'red' ? 'bg-red-500/20 text-red-400' :
                         getSelectedModel()?.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
                           getSelectedModel()?.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
                             'bg-green-500/20 text-green-400'
@@ -123,7 +129,8 @@ export default function HomePage() {
                       }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${model.color === 'red' ? 'bg-red-500' :
+                      <div className={`w-3 h-3 rounded-full ${model.color === 'blue' ? 'bg-blue-500' :
+                        model.color === 'red' ? 'bg-red-500' :
                           model.color === 'orange' ? 'bg-orange-500' :
                             model.color === 'yellow' ? 'bg-yellow-500' :
                               'bg-green-500'
@@ -131,7 +138,8 @@ export default function HomePage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-white font-medium">{model.name}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${model.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${model.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
+                            model.color === 'red' ? 'bg-red-500/20 text-red-400' :
                               model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
                                 model.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
                                   'bg-green-500/20 text-green-400'

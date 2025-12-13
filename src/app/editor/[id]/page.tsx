@@ -25,6 +25,10 @@ interface SelectedElement {
 
 // Available models
 const AVAILABLE_MODELS = [
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'blue' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Powerful', color: 'blue' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Stable Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight Gemini', provider: 'gemini', tier: 'Fast', color: 'blue' },
     { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
     { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
     { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
@@ -48,12 +52,13 @@ export default function EditorPage() {
     const [device, setDevice] = useState<DeviceType>('desktop');
     const [showVersions, setShowVersions] = useState(false);
     const [showEditPanel, setShowEditPanel] = useState(false);
-    const [showCodePanel, setShowCodePanel] = useState(false);
+    const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
+    const [isCodeFullscreen, setIsCodeFullscreen] = useState(false);
     const [displayedCode, setDisplayedCode] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
     const [editMode, setEditMode] = useState(false);
-    const [selectedModel, setSelectedModel] = useState('z-ai/glm-4.5-air:free');
+    const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
     const [showModelDropdown, setShowModelDropdown] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -435,7 +440,7 @@ export default function EditorPage() {
         const userMessage = input.trim();
         setInput('');
         setSending(true);
-        setShowCodePanel(true); // Auto-open code panel to show live updates
+        setActiveTab('code'); // Auto-open code panel to show live updates
         setIsTyping(true);
 
         const tempMessage: Message = {
@@ -703,29 +708,52 @@ export default function EditorPage() {
                         </svg>
                         History
                     </button>
-                    <button
-                        onClick={() => {
-                            setShowCodePanel(true);
-                            setDisplayedCode(currentCode);
-                            setIsTyping(false);
-                        }}
-                        className="px-3 py-1.5 bg-white/5 text-gray-300 hover:text-white rounded text-sm flex items-center gap-1"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                        </svg>
-                        Code
-                    </button>
+
+                    {/* Preview/Code Toggle Tabs */}
+                    <div className="flex items-center bg-white/5 rounded-lg p-1">
+                        <button
+                            onClick={() => setActiveTab('preview')}
+                            className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-all ${activeTab === 'preview'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-400 hover:text-white'
+                                }`}
+                        >
+                            {activeTab === 'preview' && (
+                                <span className="w-2 h-2 bg-white rounded-full"></span>
+                            )}
+                            Preview
+                        </button>
+                        <button
+                            onClick={() => {
+                                setActiveTab('code');
+                                setDisplayedCode(currentCode);
+                            }}
+                            className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-all ${activeTab === 'code'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-400 hover:text-white'
+                                }`}
+                        >
+                            {activeTab === 'code' && (
+                                <span className="w-2 h-2 bg-white rounded-full"></span>
+                            )}
+                            Code
+                            {isTyping && (
+                                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                            )}
+                        </button>
+                    </div>
+
+                    {/* New Tab button */}
                     <button
                         onClick={handlePreview}
-                        className="px-3 py-1.5 bg-white/5 text-gray-300 hover:text-white rounded text-sm flex items-center gap-1"
+                        className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm flex items-center gap-2 hover:bg-blue-500/30 transition-colors border border-blue-500/30"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
-                        Preview
+                        New Tab
                     </button>
+
                     <button
                         onClick={handleDownload}
                         className="px-3 py-1.5 bg-white/5 text-gray-300 hover:text-white rounded text-sm flex items-center gap-1"
@@ -861,28 +889,111 @@ export default function EditorPage() {
                     </div>
                 </div>
 
-                {/* Preview Panel */}
-                <div className="flex-1 bg-[#1a1a2e] flex items-center justify-center p-4 relative">
-                    {editMode && (
-                        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-purple-600 text-white rounded-full text-sm font-medium shadow-lg">
-                            Click any element to edit it
+                {/* Preview/Code Panel */}
+                <div className={`flex-1 bg-[#0d0d1a] flex flex-col overflow-hidden ${isCodeFullscreen && activeTab === 'code' ? 'fixed inset-0 z-50' : ''}`}>
+                    {activeTab === 'code' ? (
+                        /* Code Panel with live updates */
+                        <div className="flex-1 flex flex-col bg-[#0d1117] overflow-hidden">
+                            {/* Code Header */}
+                            <div className="flex items-center justify-between p-3 border-b border-white/10 flex-shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                    </div>
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-lg">
+                                        <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span className="text-gray-300 text-sm font-mono">index.html</span>
+                                    </div>
+                                    {isTyping && (
+                                        <div className="flex items-center gap-2 text-green-400 text-sm">
+                                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                            Writing code...
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(currentCode);
+                                            alert('Code copied to clipboard!');
+                                        }}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        Copy
+                                    </button>
+                                    <button
+                                        onClick={() => setIsCodeFullscreen(!isCodeFullscreen)}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
+                                        title={isCodeFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                                    >
+                                        {isCodeFullscreen ? (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        ) : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                            </svg>
+                                        )}
+                                        {isCodeFullscreen ? 'Exit' : 'Fullscreen'}
+                                    </button>
+                                    <div className="text-gray-500 text-sm">
+                                        {displayedCode.split('\n').length} lines
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Code Content */}
+                            <div ref={codeContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 font-mono text-sm">
+                                <pre className="text-gray-300">
+                                    <code>
+                                        {displayedCode.split('\n').map((line, i) => (
+                                            <div key={i} className="flex hover:bg-white/5 leading-6">
+                                                <span className="select-none w-12 text-right pr-4 text-gray-600 border-r border-white/10 mr-4 flex-shrink-0">
+                                                    {i + 1}
+                                                </span>
+                                                <span className="flex-1 whitespace-pre-wrap break-all">{line}</span>
+                                            </div>
+                                        ))}
+                                        {isTyping && (
+                                            <span className="inline-block w-2 h-5 bg-green-400 animate-pulse ml-1"></span>
+                                        )}
+                                    </code>
+                                </pre>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Preview Panel */
+                        <div className="flex-1 flex items-center justify-center p-4 relative">
+                            {editMode && (
+                                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-purple-600 text-white rounded-full text-sm font-medium shadow-lg">
+                                    Click any element to edit it
+                                </div>
+                            )}
+
+                            <div
+                                className="bg-white rounded-lg overflow-hidden shadow-2xl transition-all duration-300"
+                                style={{
+                                    width: getDeviceWidth(),
+                                    height: device === 'desktop' ? '100%' : '90%',
+                                }}
+                            >
+                                <iframe
+                                    ref={iframeRef}
+                                    srcDoc={injectLinkHandler(editMode ? injectEditScript() : currentCode)}
+                                    className="w-full h-full"
+                                    sandbox="allow-scripts allow-same-origin"
+                                />
+                            </div>
                         </div>
                     )}
-
-                    <div
-                        className="bg-white rounded-lg overflow-hidden shadow-2xl transition-all duration-300"
-                        style={{
-                            width: getDeviceWidth(),
-                            height: device === 'desktop' ? '100%' : '90%',
-                        }}
-                    >
-                        <iframe
-                            ref={iframeRef}
-                            srcDoc={injectLinkHandler(editMode ? injectEditScript() : currentCode)}
-                            className="w-full h-full"
-                            sandbox="allow-scripts allow-same-origin"
-                        />
-                    </div>
 
                     {/* Edit Element Panel */}
                     {showEditPanel && selectedElement && (
@@ -1154,97 +1265,7 @@ export default function EditorPage() {
                 </div>
             </div >
 
-            {/* Code Viewer Modal */}
-            {
-                showCodePanel && (
-                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-[#0d1117] border border-white/10 rounded-xl w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl">
-                            {/* Modal Header */}
-                            <div className="flex items-center justify-between p-4 border-b border-white/10">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex gap-2">
-                                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                                    </div>
-                                    <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-lg">
-                                        <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <span className="text-gray-300 text-sm font-mono">index.html</span>
-                                    </div>
-                                    {isTyping && (
-                                        <div className="flex items-center gap-2 text-purple-400 text-sm">
-                                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                                            Writing code...
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(currentCode);
-                                            alert('Code copied to clipboard!');
-                                        }}
-                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                        </svg>
-                                        Copy
-                                    </button>
-                                    <button
-                                        onClick={() => setShowCodePanel(false)}
-                                        className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
 
-                            {/* Code Content */}
-                            <div ref={codeContainerRef} className="flex-1 overflow-auto p-4 font-mono text-sm">
-                                <pre className="text-gray-300">
-                                    <code>
-                                        {displayedCode.split('\n').map((line, i) => {
-                                            // Simple syntax highlighting
-                                            const highlightedLine = line
-                                                .replace(/(&lt;)/g, '<span class="text-pink-400">&lt;</span>')
-                                                .replace(/(&gt;)/g, '<span class="text-pink-400">&gt;</span>')
-                                                .replace(/(class|className|id|href|src|alt|style|type|name|value|placeholder)=/g, '<span class="text-purple-400">$1</span>=')
-                                                .replace(/="([^"]*)"/g, '="<span class="text-green-400">$1</span>"');
-
-                                            return (
-                                                <div key={i} className="flex hover:bg-white/5 leading-6">
-                                                    <span className="select-none w-12 text-right pr-4 text-gray-600 border-r border-white/10 mr-4 flex-shrink-0">
-                                                        {i + 1}
-                                                    </span>
-                                                    <span className="flex-1 whitespace-pre-wrap break-all">{line}</span>
-                                                </div>
-                                            );
-                                        })}
-                                        {isTyping && (
-                                            <span className="inline-block w-2 h-5 bg-purple-400 animate-pulse ml-1"></span>
-                                        )}
-                                    </code>
-                                </pre>
-                            </div>
-
-                            {/* Modal Footer */}
-                            <div className="flex items-center justify-between p-4 border-t border-white/10 bg-white/5">
-                                <div className="text-gray-500 text-sm">
-                                    {currentCode.split('\n').length} lines • {currentCode.length} characters
-                                </div>
-                                <div className="text-gray-500 text-sm">
-                                    HTML
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
         </div >
     );
 }

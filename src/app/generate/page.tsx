@@ -9,6 +9,10 @@ type GenerationStep = 'idle' | 'analyzing' | 'enhancing' | 'generating' | 'savin
 
 // Available models
 const AVAILABLE_MODELS = [
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'blue' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Powerful', color: 'blue' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Stable Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight Gemini', provider: 'gemini', tier: 'Fast', color: 'blue' },
     { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
     { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
     { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
@@ -45,14 +49,16 @@ function GeneratePageContent() {
     const [step, setStep] = useState<GenerationStep>('idle');
     const [prompt, setPrompt] = useState('');
     const [inputPrompt, setInputPrompt] = useState('');
-    const [selectedModel, setSelectedModel] = useState('z-ai/glm-4.5-air:free');
+    const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const [error, setError] = useState('');
     const [messages, setMessages] = useState<{ role: 'user' | 'assistant' | 'system'; content: string }[]>([]);
     const [streamingCode, setStreamingCode] = useState('');
-    const [showCodePanel, setShowCodePanel] = useState(false);
+    const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
+    const [isCodeFullscreen, setIsCodeFullscreen] = useState(false);
     const [isGeneratingCode, setIsGeneratingCode] = useState(false);
     const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
+    const [completedProjectId, setCompletedProjectId] = useState<string | null>(null);
     const hasStarted = useRef(false);
     const codeContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -300,6 +306,7 @@ function GeneratePageContent() {
 
                                         case 'complete':
                                             projectId = data.projectId;
+                                            setCompletedProjectId(data.projectId);
                                             await refreshUserData();
                                             setStep('complete');
                                             updateGeneration(generationId, {
@@ -369,10 +376,11 @@ function GeneratePageContent() {
                                 className="w-full px-4 py-3 bg-[#12121a] border border-white/10 rounded-xl text-white flex items-center justify-between hover:border-purple-500/50 transition-colors"
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'red' ? 'bg-gradient-to-br from-red-500 to-red-700' :
-                                        AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'orange' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
-                                            AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'yellow' ? 'bg-gradient-to-br from-yellow-500 to-yellow-700' :
-                                                'bg-gradient-to-br from-green-500 to-green-700'
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'blue' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+                                        AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'red' ? 'bg-gradient-to-br from-red-500 to-red-700' :
+                                            AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'orange' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
+                                                AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'yellow' ? 'bg-gradient-to-br from-yellow-500 to-yellow-700' :
+                                                    'bg-gradient-to-br from-green-500 to-green-700'
                                         }`}>
                                         <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -381,10 +389,11 @@ function GeneratePageContent() {
                                     <div className="text-left">
                                         <div className="flex items-center gap-2">
                                             <span className="font-medium">{getSelectedModelName()}</span>
-                                            <span className={`text-xs px-2 py-0.5 rounded-full ${AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'red' ? 'bg-red-500/20 text-red-400' :
-                                                AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
-                                                    AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                        'bg-green-500/20 text-green-400'
+                                            <span className={`text-xs px-2 py-0.5 rounded-full ${AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
+                                                AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                                                    AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
+                                                        AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                            'bg-green-500/20 text-green-400'
                                                 }`}>
                                                 {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.tier}
                                             </span>
@@ -412,18 +421,20 @@ function GeneratePageContent() {
                                                 }`}
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-3 h-3 rounded-full ${model.color === 'red' ? 'bg-red-500' :
-                                                    model.color === 'orange' ? 'bg-orange-500' :
-                                                        model.color === 'yellow' ? 'bg-yellow-500' :
-                                                            'bg-green-500'
+                                                <div className={`w-3 h-3 rounded-full ${model.color === 'blue' ? 'bg-blue-500' :
+                                                    model.color === 'red' ? 'bg-red-500' :
+                                                        model.color === 'orange' ? 'bg-orange-500' :
+                                                            model.color === 'yellow' ? 'bg-yellow-500' :
+                                                                'bg-green-500'
                                                     }`}></div>
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-white font-medium">{model.name}</span>
-                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${model.color === 'red' ? 'bg-red-500/20 text-red-400' :
-                                                            model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
-                                                                model.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                                    'bg-green-500/20 text-green-400'
+                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${model.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
+                                                            model.color === 'red' ? 'bg-red-500/20 text-red-400' :
+                                                                model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
+                                                                    model.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                                        'bg-green-500/20 text-green-400'
                                                             }`}>
                                                             {model.tier}
                                                         </span>
@@ -532,11 +543,42 @@ function GeneratePageContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* Preview/Code Toggle Tabs */}
+                    <div className="flex items-center bg-white/5 rounded-lg p-1">
+                        <button
+                            onClick={() => setActiveTab('preview')}
+                            className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-all ${activeTab === 'preview'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-400 hover:text-white'
+                                }`}
+                        >
+                            {activeTab === 'preview' && (
+                                <span className="w-2 h-2 bg-white rounded-full"></span>
+                            )}
+                            Preview
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('code')}
+                            className={`px-4 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition-all ${activeTab === 'code'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-400 hover:text-white'
+                                }`}
+                        >
+                            {activeTab === 'code' && (
+                                <span className="w-2 h-2 bg-white rounded-full"></span>
+                            )}
+                            Code
+                            {isGeneratingCode && (
+                                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                            )}
+                        </button>
+                    </div>
+
                     {/* Stop button - visible during generation */}
                     {step !== 'idle' && step !== 'complete' && step !== 'error' && (
                         <button
                             onClick={stopGeneration}
-                            className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded text-sm flex items-center gap-1 hover:bg-red-500/30 transition-colors border border-red-500/30"
+                            className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-sm flex items-center gap-1 hover:bg-red-500/30 transition-colors border border-red-500/30"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -546,22 +588,27 @@ function GeneratePageContent() {
                         </button>
                     )}
 
-                    {/* Code button - always visible during generation */}
-                    <button
-                        onClick={() => setShowCodePanel(!showCodePanel)}
-                        className={`px-3 py-1.5 rounded text-sm flex items-center gap-1 transition-colors ${showCodePanel
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-white/5 text-gray-300 hover:text-white'
-                            }`}
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                        </svg>
-                        Code
-                        {isGeneratingCode && (
-                            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse ml-1"></span>
-                        )}
-                    </button>
+                    {/* New Tab button - visible when there's code to preview */}
+                    {streamingCode && (
+                        <button
+                            onClick={() => {
+                                if (completedProjectId) {
+                                    window.open(`/preview/${completedProjectId}`, '_blank');
+                                } else {
+                                    // Open a data URL preview if project not yet saved
+                                    const blob = new Blob([streamingCode], { type: 'text/html' });
+                                    const url = URL.createObjectURL(blob);
+                                    window.open(url, '_blank');
+                                }
+                            }}
+                            className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm flex items-center gap-2 hover:bg-blue-500/30 transition-colors border border-blue-500/30"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            New Tab
+                        </button>
+                    )}
 
                     <div className="text-gray-500 text-sm">
                         {streamingCode.split('\n').length} lines
@@ -646,8 +693,8 @@ function GeneratePageContent() {
                 </div>
 
                 {/* Preview/Code Panel */}
-                <div className="flex-1 bg-[#1a1a2e] flex flex-col overflow-hidden">
-                    {showCodePanel ? (
+                <div className={`flex-1 bg-[#0d0d1a] flex flex-col overflow-hidden ${isCodeFullscreen && activeTab === 'code' ? 'fixed inset-0 z-50' : ''}`}>
+                    {activeTab === 'code' ? (
                         /* Code Panel with real-time streaming */
                         <div className="flex-1 flex flex-col bg-[#0d1117] overflow-hidden">
                             {/* Code Header */}
@@ -671,8 +718,38 @@ function GeneratePageContent() {
                                         </div>
                                     )}
                                 </div>
-                                <div className="text-gray-500 text-sm">
-                                    {streamingCode.split('\n').length} lines
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(streamingCode);
+                                            alert('Code copied to clipboard!');
+                                        }}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        Copy
+                                    </button>
+                                    <button
+                                        onClick={() => setIsCodeFullscreen(!isCodeFullscreen)}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
+                                        title={isCodeFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                                    >
+                                        {isCodeFullscreen ? (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        ) : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                            </svg>
+                                        )}
+                                        {isCodeFullscreen ? 'Exit' : 'Fullscreen'}
+                                    </button>
+                                    <div className="text-gray-500 text-sm">
+                                        {streamingCode.split('\n').length} lines
+                                    </div>
                                 </div>
                             </div>
 
@@ -696,32 +773,54 @@ function GeneratePageContent() {
                             </div>
                         </div>
                     ) : (
-                        /* Loading State */
-                        <div className="flex-1 flex items-center justify-center">
-                            <div className="text-center">
-                                {/* Animated loading icon */}
-                                <div className="w-20 h-20 mx-auto mb-8 relative">
-                                    <div className="absolute inset-0 border-2 border-purple-500/30 rounded-lg"></div>
-                                    <div className="absolute inset-2 border-2 border-dashed border-purple-400/50 rounded animate-spin" style={{ animationDuration: '3s' }}></div>
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
+                        /* Preview Panel with live website preview */
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            {streamingCode ? (
+                                /* Show live preview when code is available */
+                                <div className="flex-1 bg-white rounded-lg m-2 overflow-hidden relative">
+                                    <iframe
+                                        srcDoc={streamingCode}
+                                        className="w-full h-full border-0"
+                                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                                        title="Website Preview"
+                                    />
+                                    {isGeneratingCode && (
+                                        <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 bg-black/70 backdrop-blur-sm rounded-lg">
+                                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                            <span className="text-white text-sm">Generating...</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                /* Show loading state when no code yet */
+                                <div className="flex-1 flex items-center justify-center">
+                                    <div className="text-center">
+                                        {/* Animated loading icon */}
+                                        <div className="w-20 h-20 mx-auto mb-8 relative">
+                                            <div className="absolute inset-0 border-2 border-purple-500/30 rounded-lg"></div>
+                                            <div className="absolute inset-2 border-2 border-dashed border-purple-400/50 rounded animate-spin" style={{ animationDuration: '3s' }}></div>
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                </svg>
+                                            </div>
+                                        </div>
+
+                                        <h2 className="text-xl text-white font-medium mb-2">
+                                            {step === 'enhancing' && 'Enhancing your prompt...'}
+                                            {step === 'generating' && 'Generating your website...'}
+                                            {step === 'saving' && 'Saving your project...'}
+                                            {step === 'complete' && 'Website created!'}
+                                            {step === 'error' && 'Something went wrong'}
+                                            {step === 'analyzing' && 'Analyzing your request...'}
+                                            {step === 'idle' && 'Waiting for prompt...'}
+                                        </h2>
+                                        <p className="text-gray-500 text-sm">
+                                            {step === 'idle' ? 'Enter a prompt in the chat to get started' : 'This may take a moment...'}
+                                        </p>
                                     </div>
                                 </div>
-
-                                <h2 className="text-xl text-white font-medium mb-2">
-                                    {step === 'enhancing' && 'Enhancing your prompt...'}
-                                    {step === 'generating' && 'Generating your website...'}
-                                    {step === 'saving' && 'Saving your project...'}
-                                    {step === 'complete' && 'Website created!'}
-                                    {step === 'error' && 'Something went wrong'}
-                                    {step === 'analyzing' && 'Analyzing your request...'}
-                                </h2>
-                                <p className="text-gray-500 text-sm">
-                                    {isGeneratingCode ? 'Click "Code" to see real-time generation...' : 'This may take a moment...'}
-                                </p>
-                            </div>
+                            )}
                         </div>
                     )}
                 </div>

@@ -49,6 +49,10 @@ export default function CommunityPage() {
     const getModelDisplayName = (modelId?: string) => {
         if (!modelId) return null;
         const modelNames: Record<string, string> = {
+            'gemini-2.5-flash': 'Gemini 2.5 Flash',
+            'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
+            'gemini-2.0-flash': 'Gemini 2.0 Flash',
+            'gemini-2.0-flash-lite': 'Gemini 2.0 Flash Lite',
             'z-ai/glm-4.5-air:free': 'GLM 4.5 Air',
             'openai/gpt-oss-120b': 'GPT OSS 120B',
             'openai/gpt-oss-20b': 'GPT OSS 20B',

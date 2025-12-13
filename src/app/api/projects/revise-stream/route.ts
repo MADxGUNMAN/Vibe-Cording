@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getProject, updateProject, addMessage, addVersion, getUser, updateUserCredits } from '@/lib/firestore';
 
 // Initialize Groq client
@@ -18,8 +19,15 @@ const openrouter = new OpenAI({
     },
 });
 
+// Initialize Gemini client
+const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
 // Available models with provider info
 const AVAILABLE_MODELS = [
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'gemini' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', provider: 'gemini' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'gemini' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', provider: 'gemini' },
     { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', provider: 'openrouter' },
     { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', provider: 'openrouter' },
     { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', provider: 'openrouter' },
@@ -28,20 +36,24 @@ const AVAILABLE_MODELS = [
 ];
 
 // Helper to get correct provider based on model
-function getModelProvider(modelId: string): 'groq' | 'openrouter' {
+function getModelProvider(modelId: string): 'gemini' | 'groq' | 'openrouter' {
     const model = AVAILABLE_MODELS.find(m => m.id === modelId);
-    return model?.provider as 'groq' | 'openrouter' || 'openrouter';
+    return model?.provider as 'gemini' | 'groq' | 'openrouter' || 'openrouter';
 }
 
-const ENHANCE_REVISION_SYSTEM = `You are a prompt enhancement specialist. The user wants to make changes to their website. Enhance their request to be more specific and actionable for a web developer.
+const ENHANCE_REVISION_SYSTEM = `You are an expert web design consultant specializing in website revisions and improvements. Transform the user's revision request into a detailed, actionable specification.
 
-Enhance this by:
-1. Being specific about what elements to change
-2. Mentioning design details (colors, spacing, sizes)
-3. Clarifying the desired outcome
-4. Using clear technical terms
+When enhancing a revision request, include:
+1. **Specific Elements**: Identify exactly which HTML elements, sections, or components to modify
+2. **Design Details**: Specify exact colors (hex codes), spacing (px/rem values), typography changes, and visual effects
+3. **Technical Implementation**: Mention specific Tailwind classes, CSS properties, or JavaScript behaviors to add/modify
+4. **Visual Outcome**: Describe the expected visual result clearly
+5. **Responsive Considerations**: Note any mobile/tablet/desktop specific changes needed
+6. **Animation/Interaction**: Specify any hover effects, transitions, or animations to add
 
-Return ONLY the enhanced request, nothing else. Keep it concise (1-2 sentences).`;
+Transform the simple request into a comprehensive revision specification (2-3 detailed sentences covering all relevant aspects). Be specific enough that the changes can be implemented precisely and consistently.
+
+Return ONLY the enhanced revision specification, nothing else.`;
 
 const GENERATE_REVISION_SYSTEM = `You are an expert web developer.
 
@@ -115,7 +127,13 @@ export async function POST(request: NextRequest) {
 
                 let enhancedRevision: string;
 
-                if (provider === 'groq') {
+                if (provider === 'gemini') {
+                    const geminiModel = gemini.getGenerativeModel({ model: useModel });
+                    const enhanceResult = await geminiModel.generateContent(
+                        `${ENHANCE_REVISION_SYSTEM}\n\nUser request: ${message}`
+                    );
+                    enhancedRevision = enhanceResult.response.text() || message;
+                } else if (provider === 'groq') {
                     const enhanceResponse = await groq.chat.completions.create({
                         model: useModel,
                         messages: [
@@ -145,7 +163,20 @@ export async function POST(request: NextRequest) {
 
                 let fullCode = '';
 
-                if (provider === 'groq') {
+                if (provider === 'gemini') {
+                    const geminiModel = gemini.getGenerativeModel({ model: useModel });
+                    const generateStream = await geminiModel.generateContentStream(
+                        `${GENERATE_REVISION_SYSTEM}\n\nCurrent website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}`
+                    );
+
+                    for await (const chunk of generateStream.stream) {
+                        const content = chunk.text();
+                        if (content) {
+                            fullCode += content;
+                            controller.enqueue(sendEvent({ type: 'code', content }));
+                        }
+                    }
+                } else if (provider === 'groq') {
                     const generateStream = await groq.chat.completions.create({
                         model: useModel,
                         messages: [

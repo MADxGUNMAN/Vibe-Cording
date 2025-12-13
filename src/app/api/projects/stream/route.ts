@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createProject, addMessage, addVersion, incrementUserCreation, getUser } from '@/lib/firestore';
 
 // Initialize Groq client
@@ -18,8 +19,15 @@ const openrouter = new OpenAI({
     },
 });
 
+// Initialize Gemini client
+const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
 // Available models with provider info
 export const AVAILABLE_MODELS = [
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'blue' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Powerful', color: 'blue' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Stable Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight Gemini', provider: 'gemini', tier: 'Fast', color: 'blue' },
     { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
     { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
     { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
@@ -27,17 +35,57 @@ export const AVAILABLE_MODELS = [
     { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
 ];
 
-const ENHANCE_PROMPT_SYSTEM = `You are a prompt enhancement specialist. Take the user's website request and expand it into a detailed, comprehensive prompt that will help create the best possible website.
 
-Enhance this prompt by:
-1. Adding specific design details (layout, color scheme, typography)
-2. Specifying key sections and features
-3. Describing the user experience and interactions
-4. Including modern web design best practices
-5. Mentioning responsive design requirements
-6. Adding any missing but important elements
+const ENHANCE_PROMPT_SYSTEM = `You are an expert web design consultant and prompt enhancement specialist. Your job is to transform simple website requests into comprehensive, production-ready design specifications that will result in stunning, professional websites.
 
-Return ONLY the enhanced prompt, nothing else. Make it detailed but concise (2-3 paragraphs max).`;
+When enhancing a prompt, you MUST include ALL of the following in detail:
+
+**1. DESIGN SYSTEM & VISUAL IDENTITY:**
+- Exact color palette with specific hex codes (primary, secondary, accent, background, text colors)
+- Typography hierarchy (font families for headings and body, sizes, weights, line heights)
+- Visual style (modern minimalist, bold and vibrant, elegant luxury, playful, corporate professional, etc.)
+- Design patterns (glassmorphism, neumorphism, gradient overlays, shadows, rounded corners, etc.)
+- Spacing and layout grid system
+
+**2. COMPLETE PAGE STRUCTURE (specify each section in order):**
+- Hero section (headline style, subtext, CTA buttons, background treatment, imagery/illustration style)
+- Navigation (sticky header, mobile menu style, logo placement, links)
+- Feature/Services section (layout: grid/cards/icons, number of items, content style)
+- About/Story section (layout, imagery, content approach)
+- Testimonials/Social proof (carousel, grid, or featured style)
+- Pricing/Products section if applicable
+- Call-to-action sections
+- Footer (columns, links, social icons, newsletter signup)
+
+**3. INTERACTIVE ELEMENTS & ANIMATIONS:**
+- Hover effects (buttons, cards, links)
+- Scroll animations (fade-in, slide-in, parallax)
+- Micro-interactions (button clicks, form focus states)
+- Loading states and transitions
+- Mobile touch interactions
+
+**4. RESPONSIVE DESIGN REQUIREMENTS:**
+- Desktop layout specifications
+- Tablet adaptations
+- Mobile-first considerations
+- Breakpoint behaviors
+
+**5. CONTENT & COPY GUIDELINES:**
+- Tone of voice (professional, friendly, luxurious, playful)
+- Placeholder text approach (realistic dummy content, not lorem ipsum)
+- Imagery style (photos, illustrations, icons, abstract graphics)
+- Content hierarchy and emphasis
+
+**6. MODERN WEB STANDARDS:**
+- Accessibility considerations (contrast, focus states, semantic HTML)
+- Performance optimization hints
+- SEO-friendly structure
+- Social media integration
+
+Transform the user's simple request into a detailed specification document (4-6 detailed paragraphs) that covers all these aspects. Be specific with colors, layouts, and features. The output should be detailed enough that any developer could create a consistent, production-quality website from it.
+
+Return ONLY the enhanced prompt specification, nothing else.`;
+
 
 const GENERATE_CODE_SYSTEM = `You are an expert web developer. Create a complete, production-ready, single-page website based on the user's request.
 
@@ -129,7 +177,13 @@ export async function POST(request: NextRequest) {
 
             // Enhance prompt - use appropriate client
             let enhancedPrompt = prompt;
-            if (isOpenRouter) {
+            if (modelInfo.provider === 'gemini') {
+                const geminiModel = gemini.getGenerativeModel({ model: model });
+                const enhanceResult = await geminiModel.generateContent(
+                    `${ENHANCE_PROMPT_SYSTEM}\n\nUser request: ${prompt}`
+                );
+                enhancedPrompt = enhanceResult.response.text() || prompt;
+            } else if (modelInfo.provider === 'openrouter') {
                 const enhanceResponse = await openrouter.chat.completions.create({
                     model: model,
                     messages: [
@@ -161,7 +215,20 @@ export async function POST(request: NextRequest) {
             // Generate website with streaming - use appropriate client
             let fullCode = '';
 
-            if (isOpenRouter) {
+            if (modelInfo.provider === 'gemini') {
+                const geminiModel = gemini.getGenerativeModel({ model: model });
+                const generateStream = await geminiModel.generateContentStream(
+                    `${GENERATE_CODE_SYSTEM}\n\nUser request: ${enhancedPrompt}`
+                );
+
+                for await (const chunk of generateStream.stream) {
+                    const content = chunk.text();
+                    if (content) {
+                        fullCode += content;
+                        await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);
+                    }
+                }
+            } else if (modelInfo.provider === 'openrouter') {
                 const generateResponse = await openrouter.chat.completions.create({
                     model: model,
                     messages: [

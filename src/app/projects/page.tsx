@@ -47,6 +47,10 @@ export default function ProjectsPage() {
     const getModelDisplayName = (modelId?: string) => {
         if (!modelId) return null;
         const modelNames: Record<string, string> = {
+            'gemini-2.5-flash': 'Gemini 2.5 Flash',
+            'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
+            'gemini-2.0-flash': 'Gemini 2.0 Flash',
+            'gemini-2.0-flash-lite': 'Gemini 2.0 Flash Lite',
             'z-ai/glm-4.5-air:free': 'GLM 4.5 Air',
             'openai/gpt-oss-120b': 'GPT OSS 120B',
             'openai/gpt-oss-20b': 'GPT OSS 20B',
@@ -122,8 +126,8 @@ export default function ProjectsPage() {
                                             <div className="w-8 h-8 spinner" />
                                         </div>
                                     )}
-                                    {/* Overlay on hover */}
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                    {/* Overlay - always visible on mobile/tablet, hover on desktop */}
+                                    <div className="absolute inset-0 bg-black/50 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                         <button
                                             onClick={() => router.push(`/editor/${project.id}`)}
                                             className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
