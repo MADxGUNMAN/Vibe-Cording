@@ -18,7 +18,9 @@
   <a href="https://ansarisouaib.in">
     <img src="https://img.shields.io/badge/Developer-Ansari_Souaib-purple?style=for-the-badge&logo=github" alt="Developer"/>
   </a>
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
+  </a>
   <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status"/>
 </p>
 
