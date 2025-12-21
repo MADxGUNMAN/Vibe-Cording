@@ -4,21 +4,9 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useActiveGenerations } from '@/components/ActiveGenerationsProvider';
+import { AVAILABLE_MODELS } from '@/lib/models';
 
 type GenerationStep = 'idle' | 'analyzing' | 'enhancing' | 'generating' | 'saving' | 'complete' | 'error';
-
-// Available models
-const AVAILABLE_MODELS = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'blue' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Powerful', color: 'blue' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Stable Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight Gemini', provider: 'gemini', tier: 'Fast', color: 'blue' },
-    { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
-    { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
-    { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
-    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Groq model', provider: 'groq', tier: 'Fast', color: 'green' },
-    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
-];
 
 // Loading component for Suspense fallback
 function GeneratePageLoading() {
@@ -50,6 +38,8 @@ function GeneratePageContent() {
     const [prompt, setPrompt] = useState('');
     const [inputPrompt, setInputPrompt] = useState('');
     const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
+    const [enhancePrompt, setEnhancePrompt] = useState(true);
+    const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const [error, setError] = useState('');
     const [messages, setMessages] = useState<{ role: 'user' | 'assistant' | 'system'; content: string }[]>([]);
@@ -172,6 +162,8 @@ function GeneratePageContent() {
         const pendingPrompt = sessionStorage.getItem('pendingPrompt');
         const pendingUserId = sessionStorage.getItem('pendingUserId');
         const pendingModel = sessionStorage.getItem('pendingModel');
+        const pendingEnhancePrompt = sessionStorage.getItem('pendingEnhancePrompt');
+        const pendingStyles = sessionStorage.getItem('pendingStyles');
 
         if (pendingPrompt && pendingUserId && !hasStarted.current) {
             hasStarted.current = true;
@@ -184,13 +176,23 @@ function GeneratePageContent() {
                 setSelectedModel(pendingModel);
             }
 
+            // Use pending enhance prompt setting if available
+            const shouldEnhance = pendingEnhancePrompt !== 'false';
+            setEnhancePrompt(shouldEnhance);
+
+            // Use pending styles if available
+            const stylesToUse = pendingStyles ? JSON.parse(pendingStyles) : [];
+            setSelectedStyles(stylesToUse);
+
             // Clear session storage
             sessionStorage.removeItem('pendingPrompt');
             sessionStorage.removeItem('pendingUserId');
             sessionStorage.removeItem('pendingModel');
+            sessionStorage.removeItem('pendingEnhancePrompt');
+            sessionStorage.removeItem('pendingStyles');
 
             // Start generation
-            generateProjectWithStream(pendingPrompt, pendingUserId, modelToUse);
+            generateProjectWithStream(pendingPrompt, pendingUserId, modelToUse, shouldEnhance, stylesToUse);
         }
     }, []);
 
@@ -202,10 +204,10 @@ function GeneratePageContent() {
         setPrompt(inputPrompt);
         setMessages([{ role: 'user', content: inputPrompt }]);
         setInputPrompt('');
-        generateProjectWithStream(inputPrompt, user.uid, selectedModel);
+        generateProjectWithStream(inputPrompt, user.uid, selectedModel, enhancePrompt, selectedStyles);
     };
 
-    const generateProjectWithStream = async (promptText: string, userId: string, model: string) => {
+    const generateProjectWithStream = async (promptText: string, userId: string, model: string, shouldEnhance: boolean = true, styles: string[] = []) => {
         // Create unique generation ID
         const generationId = `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         setCurrentGenerationId(generationId);
@@ -215,13 +217,13 @@ function GeneratePageContent() {
             id: generationId,
             prompt: promptText,
             model: model,
-            status: 'enhancing',
+            status: shouldEnhance ? 'enhancing' : 'generating',
         });
 
         try {
-            setStep('analyzing');
+            setStep(shouldEnhance ? 'analyzing' : 'generating');
             setStreamingCode('');
-            setIsGeneratingCode(false);
+            setIsGeneratingCode(!shouldEnhance);
             setError('');
 
             // Create abort controller for this request
@@ -230,7 +232,7 @@ function GeneratePageContent() {
             const response = await fetch('/api/projects/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: promptText, userId, model }),
+                body: JSON.stringify({ prompt: promptText, userId, model, enhancePrompt: shouldEnhance, styles }),
                 signal: abortControllerRef.current.signal,
             });
 
@@ -358,26 +360,26 @@ function GeneratePageContent() {
     if (step === 'idle' && !hasStarted.current) {
         return (
             <div className="min-h-screen bg-[#0a0a0f] flex flex-col">
-                <div className="flex-1 flex flex-col items-center justify-center px-4 pt-20">
-                    <div className="text-center mb-8">
-                        <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
+                    <div className="text-center mb-6">
+                        <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">
                             Create Your Website
                         </h1>
-                        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                        <p className="text-gray-400 text-base max-w-2xl mx-auto">
                             Choose an AI model and describe your website
                         </p>
                     </div>
 
                     {/* Model Selector */}
-                    <div className="w-full max-w-2xl mb-6">
+                    <div className="w-full max-w-2xl mb-4">
                         <label className="block text-gray-400 text-sm mb-2">Select AI Model</label>
                         <div className="relative">
                             <button
                                 onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                className="w-full px-4 py-3 bg-[#12121a] border border-white/10 rounded-xl text-white flex items-center justify-between hover:border-purple-500/50 transition-colors"
+                                className="w-full px-4 py-2.5 bg-[#12121a] border border-white/10 rounded-xl text-white flex items-center justify-between hover:border-purple-500/50 transition-colors"
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'blue' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'blue' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
                                         AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'red' ? 'bg-gradient-to-br from-red-500 to-red-700' :
                                             AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'orange' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
                                                 AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'yellow' ? 'bg-gradient-to-br from-yellow-500 to-yellow-700' :
@@ -389,7 +391,7 @@ function GeneratePageContent() {
                                     </div>
                                     <div className="text-left">
                                         <div className="flex items-center gap-2">
-                                            <span className="font-medium">{getSelectedModelName()}</span>
+                                            <span className="font-medium text-sm">{getSelectedModelName()}</span>
                                             <span className={`text-xs px-2 py-0.5 rounded-full ${AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
                                                 AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'red' ? 'bg-red-500/20 text-red-400' :
                                                     AVAILABLE_MODELS.find(m => m.id === selectedModel)?.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
@@ -399,7 +401,7 @@ function GeneratePageContent() {
                                                 {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.tier}
                                             </span>
                                         </div>
-                                        <div className="text-sm text-gray-500">
+                                        <div className="text-xs text-gray-500">
                                             {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.description}
                                         </div>
                                     </div>
@@ -410,7 +412,7 @@ function GeneratePageContent() {
                             </button>
 
                             {showModelDropdown && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-[#12121a] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl">
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-[#12121a] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl max-h-64 overflow-y-auto">
                                     {AVAILABLE_MODELS.map((model) => (
                                         <button
                                             key={model.id}
@@ -418,7 +420,7 @@ function GeneratePageContent() {
                                                 setSelectedModel(model.id);
                                                 setShowModelDropdown(false);
                                             }}
-                                            className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${selectedModel === model.id ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
+                                            className={`w-full px-4 py-2.5 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${selectedModel === model.id ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
                                                 }`}
                                         >
                                             <div className="flex items-center gap-3">
@@ -430,7 +432,7 @@ function GeneratePageContent() {
                                                     }`}></div>
                                                 <div>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-white font-medium">{model.name}</span>
+                                                        <span className="text-white font-medium text-sm">{model.name}</span>
                                                         <span className={`text-xs px-2 py-0.5 rounded-full ${model.color === 'blue' ? 'bg-blue-500/20 text-blue-400' :
                                                             model.color === 'red' ? 'bg-red-500/20 text-red-400' :
                                                                 model.color === 'orange' ? 'bg-orange-500/20 text-orange-400' :
@@ -440,7 +442,7 @@ function GeneratePageContent() {
                                                             {model.tier}
                                                         </span>
                                                     </div>
-                                                    <div className="text-sm text-gray-500">{model.description}</div>
+                                                    <div className="text-xs text-gray-500">{model.description}</div>
                                                 </div>
                                             </div>
                                             {selectedModel === model.id && (
@@ -455,68 +457,76 @@ function GeneratePageContent() {
                         </div>
                     </div>
 
-                    {/* Prompt input */}
+                    {/* Prompt input with Enhance Toggle inside */}
                     <form onSubmit={handleSubmit} className="w-full max-w-2xl">
-                        <div className="relative">
+                        <div className="relative bg-[#12121a] border border-white/10 rounded-2xl p-4 focus-within:border-purple-500/50 transition-colors">
                             <textarea
                                 value={inputPrompt}
                                 onChange={(e) => setInputPrompt(e.target.value)}
                                 placeholder="Describe your website... e.g., 'A modern portfolio website for a photographer with a dark theme'"
-                                className="w-full px-6 py-4 bg-[#12121a] border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 resize-none text-lg"
-                                rows={4}
+                                className="w-full h-24 bg-transparent text-white placeholder-gray-500 focus:outline-none resize-none text-base"
                                 disabled={authLoading}
                             />
-                            <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                                {!authLoading && user && userData && (
-                                    <span className="text-sm text-gray-500">
-                                        {userData.credits || 0} credits
+                            <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/5">
+                                {/* Compact Enhance Toggle */}
+                                <button
+                                    type="button"
+                                    onClick={() => setEnhancePrompt(!enhancePrompt)}
+                                    className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
+                                    title={enhancePrompt ? 'AI will enhance your prompt' : 'Using your exact prompt'}
+                                >
+                                    <div className={`relative w-8 h-4 rounded-full transition-colors ${enhancePrompt ? 'bg-purple-600' : 'bg-gray-600'}`}>
+                                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${enhancePrompt ? 'left-4' : 'left-0.5'}`}></div>
+                                    </div>
+                                    <span className="text-xs text-gray-400">
+                                        Enhance
                                     </span>
-                                )}
+                                    <span className={`text-xs px-1.5 py-0.5 rounded ${enhancePrompt ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                                        {enhancePrompt ? 'ON' : 'OFF'}
+                                    </span>
+                                </button>
+
+                                <div className="flex items-center gap-3">
+                                    {!authLoading && user && userData && (
+                                        <span className="text-xs text-gray-500">
+                                            {userData.credits || 0} credits
+                                        </span>
+                                    )}
+
+                                    {!authLoading && !user ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => router.push('/login')}
+                                            className="px-4 py-2 bg-white text-gray-900 rounded-lg font-medium text-sm hover:bg-gray-100 transition-colors flex items-center gap-2"
+                                        >
+                                            <svg className="w-4 h-4" viewBox="0 0 24 24">
+                                                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                                                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                                            </svg>
+                                            Sign in
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="submit"
+                                            disabled={!inputPrompt.trim() || authLoading}
+                                            className="px-5 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium text-sm hover:from-purple-500 hover:to-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            Create
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
-
-                        {!authLoading && !user ? (
-                            <button
-                                type="button"
-                                onClick={() => router.push('/login')}
-                                className="mt-4 w-full py-4 bg-white text-gray-900 rounded-xl font-semibold text-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                                    <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                                    <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                                    <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                                </svg>
-                                Sign in to Create
-                            </button>
-                        ) : (
-                            <button
-                                type="submit"
-                                disabled={!inputPrompt.trim() || authLoading}
-                                className="mt-4 w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold text-lg hover:from-purple-500 hover:to-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                                Create with {getSelectedModelName()}
-                            </button>
-                        )}
                     </form>
 
-                    {/* Tips */}
-                    <div className="mt-12 max-w-2xl w-full">
-                        <p className="text-gray-500 text-sm mb-4 text-center">Tips for better results:</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="p-4 bg-[#12121a] border border-white/10 rounded-xl">
-                                <p className="text-gray-300 text-sm">Be specific about the type of website (portfolio, landing page, blog)</p>
-                            </div>
-                            <div className="p-4 bg-[#12121a] border border-white/10 rounded-xl">
-                                <p className="text-gray-300 text-sm">Mention preferred colors, themes, or styles (dark, minimal, vibrant)</p>
-                            </div>
-                            <div className="p-4 bg-[#12121a] border border-white/10 rounded-xl">
-                                <p className="text-gray-300 text-sm">Include key sections you want (hero, features, pricing, contact)</p>
-                            </div>
-                        </div>
+                    {/* Tips - Compact */}
+                    <div className="mt-6 max-w-2xl w-full">
+                        <p className="text-gray-500 text-xs mb-2 text-center">Tips: Be specific about type, colors, and sections you need</p>
                     </div>
                 </div>
             </div>

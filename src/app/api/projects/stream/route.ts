@@ -3,6 +3,7 @@ import Groq from 'groq-sdk';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createProject, addMessage, addVersion, incrementUserCreation, getUser } from '@/lib/firestore';
+import { AVAILABLE_MODELS } from '@/lib/models';
 
 // Initialize Groq client
 const groq = new Groq({
@@ -19,21 +20,101 @@ const openrouter = new OpenAI({
     },
 });
 
-// Initialize Gemini client
-const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+// Initialize Gemini clients with fallback keys
+const GEMINI_API_KEYS = [
+    process.env.GEMINI_API_KEY || "",
+    process.env.GEMINI_BACKUP_API_KEY || "",
+    process.env.GEMINI_BACKUP_API_KEY_2 || "",
+].filter(key => key.length > 0);
 
-// Available models with provider info
-export const AVAILABLE_MODELS = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'blue' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Powerful', color: 'blue' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Stable Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight Gemini', provider: 'gemini', tier: 'Fast', color: 'blue' },
-    { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
-    { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
-    { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
-    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Groq model', provider: 'groq', tier: 'Fast', color: 'green' },
-    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
-];
+const geminiClients = GEMINI_API_KEYS.map(key => new GoogleGenerativeAI(key));
+
+// Helper function to check if error is retryable (quota/rate limit)
+function isRetryableGeminiError(error: any): boolean {
+    const errorMessage = error?.message?.toLowerCase() || '';
+    const errorStatus = error?.status || error?.code;
+
+    return (
+        errorStatus === 429 ||
+        errorStatus === 503 ||
+        errorMessage.includes('quota') ||
+        errorMessage.includes('rate limit') ||
+        errorMessage.includes('resource exhausted') ||
+        errorMessage.includes('overloaded') ||
+        errorMessage.includes('too many requests')
+    );
+}
+
+// Helper function to generate content with Gemini fallback
+async function generateWithGeminiFallback(
+    model: string,
+    prompt: string,
+    onKeySwitch?: (keyIndex: number) => void
+): Promise<string> {
+    let lastError: any;
+
+    for (let i = 0; i < geminiClients.length; i++) {
+        try {
+            const geminiModel = geminiClients[i].getGenerativeModel({ model });
+            const result = await geminiModel.generateContent(prompt);
+            return result.response.text() || '';
+        } catch (error: any) {
+            lastError = error;
+            console.log(`Gemini key ${i + 1} failed:`, error?.message);
+
+            // If this is a retryable error and we have more keys, try the next one
+            if (isRetryableGeminiError(error) && i < geminiClients.length - 1) {
+                console.log(`Switching to backup key ${i + 2}...`);
+                onKeySwitch?.(i + 1);
+                continue;
+            }
+
+            // If it's not retryable or we're out of keys, throw the error
+            throw error;
+        }
+    }
+
+    throw lastError;
+}
+
+// Helper function to stream content with Gemini fallback
+async function* streamWithGeminiFallback(
+    model: string,
+    prompt: string,
+    onKeySwitch?: (keyIndex: number) => void
+): AsyncGenerator<string, void, unknown> {
+    let lastError: any;
+
+    for (let i = 0; i < geminiClients.length; i++) {
+        try {
+            const geminiModel = geminiClients[i].getGenerativeModel({ model });
+            const streamResult = await geminiModel.generateContentStream(prompt);
+
+            for await (const chunk of streamResult.stream) {
+                yield chunk.text();
+            }
+            return; // Success, exit the function
+        } catch (error: any) {
+            lastError = error;
+            console.log(`Gemini streaming key ${i + 1} failed:`, error?.message);
+
+            // If this is a retryable error and we have more keys, try the next one
+            if (isRetryableGeminiError(error) && i < geminiClients.length - 1) {
+                console.log(`Switching to backup key ${i + 2} for streaming...`);
+                onKeySwitch?.(i + 1);
+                continue;
+            }
+
+            // If it's not retryable or we're out of keys, throw the error
+            throw error;
+        }
+    }
+
+    throw lastError;
+}
+
+// Re-export for backwards compatibility
+export { AVAILABLE_MODELS };
 
 
 const ENHANCE_PROMPT_SYSTEM = `You are an expert web design consultant and prompt enhancement specialist. Your job is to transform simple website requests into comprehensive, production-ready design specifications that will result in stunning, professional websites.
@@ -117,7 +198,19 @@ function getModelInfo(modelId: string) {
 
 export async function POST(request: NextRequest) {
     const body = await request.json();
-    const { prompt, userId, model = 'z-ai/glm-4.5-air:free' } = body;
+    const { prompt, userId, model = 'z-ai/glm-4.5-air:free', enhancePrompt = true, styles = [] } = body;
+
+    // Build style instruction based on selected styles
+    const styleDescriptions: Record<string, string> = {
+        innovative: 'Creative, experimental layouts with unique visual elements, unconventional navigation patterns, bold typography choices, asymmetric designs, and cutting-edge CSS techniques',
+        professional: 'Clean, corporate aesthetics with structured layouts, trustworthy color schemes (blues, grays, whites), clear hierarchy, ample whitespace, business-appropriate imagery, and polished UI components',
+        futuristic: 'High-tech appearance with neon accents, dark themes, glassmorphism effects, cyber-inspired elements, gradient glows, animated particles, tech-forward typography, and sci-fi inspired interfaces'
+    };
+
+    const selectedStyleDescriptions = styles.map((s: string) => styleDescriptions[s]).filter(Boolean);
+    const styleInstruction = selectedStyleDescriptions.length > 0
+        ? `\n\n**REQUIRED DESIGN STYLE(S):** The website MUST incorporate these specific design styles:\n${selectedStyleDescriptions.map((desc: string, i: number) => `${i + 1}. ${desc}`).join('\n')}\n\nBlend these styles harmoniously if multiple are selected.`
+        : '';
 
     if (!prompt) {
         return new Response(JSON.stringify({ error: 'Prompt is required' }), {
@@ -171,42 +264,57 @@ export async function POST(request: NextRequest) {
     // Start the async generation process
     (async () => {
         try {
-            // Send status: enhancing
-            await safeWrite(`data: ${JSON.stringify({ type: 'status', status: 'enhancing' })}\n\n`);
-            await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Using model: ${modelInfo.name} (${modelInfo.provider})` })}\n\n`);
-
-            // Enhance prompt - use appropriate client
             let enhancedPrompt = prompt;
-            if (modelInfo.provider === 'gemini') {
-                const geminiModel = gemini.getGenerativeModel({ model: model });
-                const enhanceResult = await geminiModel.generateContent(
-                    `${ENHANCE_PROMPT_SYSTEM}\n\nUser request: ${prompt}`
-                );
-                enhancedPrompt = enhanceResult.response.text() || prompt;
-            } else if (modelInfo.provider === 'openrouter') {
-                const enhanceResponse = await openrouter.chat.completions.create({
-                    model: model,
-                    messages: [
-                        { role: "system", content: ENHANCE_PROMPT_SYSTEM },
-                        { role: "user", content: prompt }
-                    ],
-                    max_tokens: 1000,
-                });
-                enhancedPrompt = enhanceResponse.choices[0]?.message?.content || prompt;
-            } else {
-                const enhanceResponse = await groq.chat.completions.create({
-                    model: model,
-                    messages: [
-                        { role: "system", content: ENHANCE_PROMPT_SYSTEM },
-                        { role: "user", content: prompt }
-                    ],
-                    max_tokens: 1000,
-                });
-                enhancedPrompt = enhanceResponse.choices[0]?.message?.content || prompt;
-            }
 
-            await safeWrite(`data: ${JSON.stringify({ type: 'enhanced', enhancedPrompt })}\n\n`);
-            await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Enhanced your prompt for better results...` })}\n\n`);
+            // Only enhance prompt if enhancePrompt is true
+            if (enhancePrompt) {
+                // Send status: enhancing
+                await safeWrite(`data: ${JSON.stringify({ type: 'status', status: 'enhancing' })}\n\n`);
+                await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Using model: ${modelInfo.name} (${modelInfo.provider})` })}\n\n`);
+
+                // Show selected styles if any
+                if (styles.length > 0) {
+                    const styleNames = styles.map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(', ');
+                    await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Applying styles: ${styleNames}` })}\n\n`);
+                }
+                // Enhance prompt - use appropriate client
+                if (modelInfo.provider === 'gemini') {
+                    enhancedPrompt = await generateWithGeminiFallback(
+                        model,
+                        `${ENHANCE_PROMPT_SYSTEM}${styleInstruction}\n\nUser request: ${prompt}`,
+                        async (keyIndex) => {
+                            await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Switching to backup API key ${keyIndex + 1}...` })}\n\n`);
+                        }
+                    ) || prompt;
+                } else if (modelInfo.provider === 'openrouter') {
+                    const enhanceResponse = await openrouter.chat.completions.create({
+                        model: model,
+                        messages: [
+                            { role: "system", content: ENHANCE_PROMPT_SYSTEM + styleInstruction },
+                            { role: "user", content: prompt }
+                        ],
+                        max_tokens: 1000,
+                    });
+                    enhancedPrompt = enhanceResponse.choices[0]?.message?.content || prompt;
+                } else {
+                    const enhanceResponse = await groq.chat.completions.create({
+                        model: model,
+                        messages: [
+                            { role: "system", content: ENHANCE_PROMPT_SYSTEM + styleInstruction },
+                            { role: "user", content: prompt }
+                        ],
+                        max_tokens: 1000,
+                    });
+                    enhancedPrompt = enhanceResponse.choices[0]?.message?.content || prompt;
+                }
+
+                await safeWrite(`data: ${JSON.stringify({ type: 'enhanced', enhancedPrompt })}\n\n`);
+                await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Enhanced your prompt for better results...` })}\n\n`);
+            } else {
+                // Skip enhancement - notify user
+                await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Using model: ${modelInfo.name} (${modelInfo.provider})` })}\n\n`);
+                await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Using your prompt directly (enhancement disabled)...` })}\n\n`);
+            }
 
             // Send status: generating
             await safeWrite(`data: ${JSON.stringify({ type: 'status', status: 'generating' })}\n\n`);
@@ -216,13 +324,15 @@ export async function POST(request: NextRequest) {
             let fullCode = '';
 
             if (modelInfo.provider === 'gemini') {
-                const geminiModel = gemini.getGenerativeModel({ model: model });
-                const generateStream = await geminiModel.generateContentStream(
-                    `${GENERATE_CODE_SYSTEM}\n\nUser request: ${enhancedPrompt}`
+                const streamGenerator = streamWithGeminiFallback(
+                    model,
+                    `${GENERATE_CODE_SYSTEM}\n\nUser request: ${enhancedPrompt}`,
+                    async (keyIndex) => {
+                        await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Switching to backup API key ${keyIndex + 1}...` })}\n\n`);
+                    }
                 );
 
-                for await (const chunk of generateStream.stream) {
-                    const content = chunk.text();
+                for await (const content of streamGenerator) {
                     if (content) {
                         fullCode += content;
                         await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);

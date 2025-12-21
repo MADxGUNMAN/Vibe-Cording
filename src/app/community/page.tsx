@@ -90,9 +90,9 @@ export default function CommunityPage() {
                             >
                                 {/* Preview */}
                                 <div className="h-40 bg-[#0d0d1a] relative overflow-hidden">
-                                    {project.current_code ? (
+                                    {(project.published_code || project.current_code) ? (
                                         <iframe
-                                            srcDoc={project.current_code}
+                                            srcDoc={project.published_code || project.current_code}
                                             className="w-full h-full pointer-events-none transform scale-50 origin-top-left"
                                             style={{ width: '200%', height: '200%' }}
                                             sandbox="allow-scripts"

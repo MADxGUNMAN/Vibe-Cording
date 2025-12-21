@@ -47,6 +47,7 @@ export interface Project {
     name: string;
     initial_prompt: string;
     current_code: string;
+    published_code?: string; // The code that was published to community
     userId: string;
     isPublished: boolean;
     model?: string; // The AI model used to create/update the project
@@ -172,8 +173,8 @@ export async function deleteProject(projectId: string) {
     await deleteDoc(doc(db, 'projects', projectId));
 }
 
-export async function publishProject(projectId: string) {
-    await updateProject(projectId, { isPublished: true });
+export async function publishProject(projectId: string, code: string) {
+    await updateProject(projectId, { isPublished: true, published_code: code });
 }
 
 // Conversation operations

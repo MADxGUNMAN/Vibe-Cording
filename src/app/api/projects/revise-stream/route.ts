@@ -3,6 +3,7 @@ import Groq from 'groq-sdk';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getProject, updateProject, addMessage, addVersion, getUser, updateUserCredits } from '@/lib/firestore';
+import { AVAILABLE_MODELS } from '@/lib/models';
 
 // Initialize Groq client
 const groq = new Groq({
@@ -21,19 +22,6 @@ const openrouter = new OpenAI({
 
 // Initialize Gemini client
 const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
-// Available models with provider info
-const AVAILABLE_MODELS = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'gemini' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', provider: 'gemini' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'gemini' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', provider: 'gemini' },
-    { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', provider: 'openrouter' },
-    { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', provider: 'openrouter' },
-    { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', provider: 'openrouter' },
-    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', provider: 'groq' },
-    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', provider: 'groq' },
-];
 
 // Helper to get correct provider based on model
 function getModelProvider(modelId: string): 'gemini' | 'groq' | 'openrouter' {

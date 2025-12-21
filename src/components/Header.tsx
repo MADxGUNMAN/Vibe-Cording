@@ -101,13 +101,19 @@ export default function Header() {
                                             <img
                                                 src={user.photoURL}
                                                 alt={user.displayName || 'User'}
-                                                className="w-8 h-8 rounded-full border border-white/10"
+                                                className="w-8 h-8 rounded-full border border-white/10 object-cover"
+                                                referrerPolicy="no-referrer"
+                                                onError={(e) => {
+                                                    // Fallback to initial if image fails to load
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.style.display = 'none';
+                                                    target.nextElementSibling?.classList.remove('hidden');
+                                                }}
                                             />
-                                        ) : (
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium">
-                                                {user.displayName?.[0] || user.email?.[0] || 'U'}
-                                            </div>
-                                        )}
+                                        ) : null}
+                                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium ${user.photoURL ? 'hidden' : ''}`}>
+                                            {user.displayName?.[0] || user.email?.[0] || 'U'}
+                                        </div>
                                     </button>
 
                                     {showDropdown && (

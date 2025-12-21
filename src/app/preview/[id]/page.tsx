@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { getProject } from '@/lib/firestore';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function PreviewPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
+    const { user } = useAuth();
     const projectId = params.id as string;
     const [html, setHtml] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -16,7 +19,18 @@ export default function PreviewPage() {
             try {
                 const project = await getProject(projectId);
                 if (project) {
-                    setHtml(project.current_code);
+                    // If owner is viewing (from editor), show current working code
+                    // If public viewer (from community), show published version
+                    const isOwner = user?.uid === project.userId;
+                    const isFromEditor = searchParams.get('source') === 'editor';
+
+                    if (isOwner || isFromEditor || !project.isPublished) {
+                        // Owner/editor preview - show current working code
+                        setHtml(project.current_code);
+                    } else {
+                        // Public viewer - show published version
+                        setHtml(project.published_code || project.current_code);
+                    }
                 } else {
                     setError('Project not found');
                 }
@@ -31,7 +45,7 @@ export default function PreviewPage() {
         if (projectId) {
             loadProject();
         }
-    }, [projectId]);
+    }, [projectId, user, searchParams]);
 
     if (loading) {
         return (

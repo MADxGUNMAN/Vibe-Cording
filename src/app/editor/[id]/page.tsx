@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { getProject, getConversation, getVersions, updateProject, publishProject, addVersion, Project, Message, Version } from '@/lib/firestore';
 import { Timestamp } from 'firebase/firestore';
+import { AVAILABLE_MODELS } from '@/lib/models';
 
 type DeviceType = 'mobile' | 'tablet' | 'desktop';
 
@@ -22,19 +23,6 @@ interface SelectedElement {
     backgroundColor: string;
     xpath: string;
 }
-
-// Available models
-const AVAILABLE_MODELS = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'blue' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Powerful', color: 'blue' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Stable Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight Gemini', provider: 'gemini', tier: 'Fast', color: 'blue' },
-    { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
-    { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
-    { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
-    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Groq model', provider: 'groq', tier: 'Fast', color: 'green' },
-    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
-];
 
 export default function EditorPage() {
     const params = useParams();
@@ -584,14 +572,14 @@ export default function EditorPage() {
     };
 
     const handlePreview = () => {
-        window.open(`/preview/${projectId}`, '_blank');
+        window.open(`/preview/${projectId}?source=editor`, '_blank');
     };
 
     const handlePublish = async () => {
         if (!projectId) return;
-        await publishProject(projectId);
-        setProject(prev => prev ? { ...prev, isPublished: true } : prev);
-        alert('Project published successfully!');
+        await publishProject(projectId, currentCode);
+        setProject(prev => prev ? { ...prev, isPublished: true, published_code: currentCode } : prev);
+        alert(project?.isPublished ? 'Website updated successfully!' : 'Project published successfully!');
     };
 
     const handleVersionSelect = (version: Version) => {
@@ -852,13 +840,21 @@ export default function EditorPage() {
                     </button>
                     <button
                         onClick={handlePublish}
-                        disabled={project.isPublished}
-                        className="px-2 md:px-3 py-1.5 bg-purple-600 text-white rounded text-sm flex items-center gap-1 hover:bg-purple-700 disabled:opacity-50 flex-shrink-0"
+                        className={`px-2 md:px-3 py-1.5 text-white rounded text-sm flex items-center gap-1 flex-shrink-0 ${project.isPublished && project.published_code === currentCode
+                            ? 'bg-green-600 cursor-default'
+                            : 'bg-purple-600 hover:bg-purple-700'
+                            }`}
+                        disabled={project.isPublished && project.published_code === currentCode}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                         </svg>
-                        <span className="hidden md:inline">{project.isPublished ? 'Published' : 'Publish'}</span>
+                        <span className="hidden md:inline">
+                            {project.isPublished
+                                ? (project.published_code === currentCode ? 'Published' : 'Update')
+                                : 'Publish'
+                            }
+                        </span>
                     </button>
                 </div>
             </div>
@@ -1068,7 +1064,7 @@ export default function EditorPage() {
                         </div>
                     ) : (
                         /* Preview Panel */
-                        <div className="flex-1 flex items-center justify-center p-4 relative">
+                        <div className="flex-1 flex items-center justify-center p-4 relative overflow-auto">
                             {editMode && (
                                 <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-purple-600 text-white rounded-full text-sm font-medium shadow-lg">
                                     Click any element to edit it
@@ -1076,21 +1072,18 @@ export default function EditorPage() {
                             )}
 
                             <div
-                                className="bg-white rounded-lg overflow-hidden shadow-2xl transition-all duration-300"
+                                className="bg-white rounded-lg overflow-hidden shadow-2xl transition-all duration-300 mx-auto"
                                 style={{
                                     width: getDeviceWidth(),
-                                    height: device === 'desktop' ? '100%' : '90%',
-                                    transform: device === 'mobile' ? 'scale(0.75)' : device === 'tablet' ? 'scale(0.85)' : 'scale(1)',
-                                    transformOrigin: 'top center',
+                                    maxWidth: '100%',
+                                    height: device === 'desktop' ? '100%' : 'calc(100% - 32px)',
+                                    minHeight: device === 'mobile' ? '667px' : device === 'tablet' ? '600px' : 'auto',
                                 }}
                             >
                                 <iframe
                                     ref={iframeRef}
                                     srcDoc={injectLinkHandler(editMode ? injectEditScript() : currentCode)}
-                                    className="w-full h-full"
-                                    style={{
-                                        height: device === 'mobile' ? '133%' : device === 'tablet' ? '118%' : '100%',
-                                    }}
+                                    className="w-full h-full border-0"
                                     sandbox="allow-scripts allow-same-origin"
                                 />
                             </div>
