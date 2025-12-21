@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js"/>
+  <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js"/>
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React"/>
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/>
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS"/>
@@ -18,7 +18,9 @@
   <a href="https://ansarisouaib.in">
     <img src="https://img.shields.io/badge/Developer-Ansari_Souaib-purple?style=for-the-badge&logo=github" alt="Developer"/>
   </a>
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
+  </a>
   <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status"/>
 </p>
 
@@ -26,20 +28,21 @@
 
 ## 🚀 About Vibe Corder
 
-**Vibe Corder** is a powerful AI-powered website builder that transforms your ideas into fully functional websites in seconds. Simply describe what you want, select an AI model, and watch as your website comes to life with real-time streaming code generation.
+**Vibe Corder** is a powerful AI-powered website builder that transforms your ideas into fully functional websites in seconds. Simply describe what you want, select from a wide range of top-tier AI models, and watch as your website comes to life with real-time streaming code generation.
 
 ### ✨ Key Features
 
 | Feature | Description |
 |---------|-------------|
-| 🤖 **Multiple AI Models** | Choose from GLM 4.5 Air, Llama 3.3 70B, GPT OSS 120B, and more |
+| 🤖 **Advanced AI Models** | **Gemini 2.5 Flash**, **Gent 2.0**, **Llama 3.3**, **GPT-4o**, and more |
 | ⚡ **Real-time Streaming** | Watch your code generate live with streaming SSE |
-| 🎨 **Visual Editor** | Click-to-edit elements with live preview |
+| 🎨 **Visual Editor** | Click-to-edit elements with live preview and deep customization |
 | 📱 **Responsive Design** | Preview in Desktop, Tablet, and Mobile views |
-| 🌐 **One-Click Publish** | Share your creations with the community |
+| 🌐 **One-Click Publish** | Share your creations with the community instantly |
 | 💬 **Chat Revisions** | Refine your website through conversational AI |
-| 📜 **Version History** | Track and restore previous versions |
-| 👑 **Admin Dashboard** | Unlimited credits for administrators |
+| 📜 **Version History** | Track and restore previous versions of your build |
+| 👑 **Admin Dashboard** | Unlimited credits and management for administrators |
+| 🚀 **Active Generations** | Track your ongoing generation tasks |
 
 ---
 
@@ -69,12 +72,6 @@
   <em>🌍 Community - Explore published projects</em>
 </p>
 
-<p align="center">
-  <img src="./screenshots/pricing.png" alt="Pricing" width="80%"/>
-  <br/>
-  <em>💰 Pricing - Choose your plan</em>
-</p>
-
 ---
 
 ## 🛠️ Tech Stack
@@ -82,8 +79,8 @@
 ### Frontend
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| **Next.js** | 15.3.3 | React framework with App Router |
-| **React** | 19.0.0 | UI library |
+| **Next.js** | 16.0.10 | React framework with App Router |
+| **React** | 19.2.1 | UI library |
 | **TypeScript** | 5.x | Type safety |
 | **Tailwind CSS** | 4.x | Styling |
 
@@ -97,6 +94,7 @@
 ### AI Integration
 | Provider | Models |
 |----------|--------|
+| **Google DeepMind** | Gemini 2.5 Flash, Gemini 2.5 Flash Lite, Gemini 2.0 Flash, Gemini 2.0 Flash Lite |
 | **OpenRouter** | GLM 4.5 Air, GPT OSS 120B, GPT OSS 20B |
 | **Groq** | Llama 3.3 70B, Llama 3.1 8B |
 
@@ -125,12 +123,12 @@ vibe-corder/
 │   │   │       ├── 📁 revise/     # Project revisions
 │   │   │       └── 📁 publish/    # Publishing projects
 │   │   ├── 📁 generate/           # Create new website page
-│   │   ├── 📁 editor/[id]/        # Project editor
+│   │   ├── 📁 editor/[id]/        # Project editor & workspace
 │   │   ├── 📁 preview/[id]/       # Project preview
 │   │   ├── 📁 projects/           # My Projects page
 │   │   ├── 📁 community/          # Published projects
+│   │   ├── 📁 active/             # Active generations dashboard
 │   │   ├── 📁 pricing/            # Pricing plans
-│   │   ├── 📁 active/             # Active generations
 │   │   └── 📁 login/              # Authentication
 │   ├── 📁 components/             # React Components
 │   │   ├── 📄 Header.tsx          # Navigation header
@@ -156,6 +154,7 @@ vibe-corder/
 - Node.js 18+ 
 - npm or yarn
 - Firebase account
+- Google AI (Gemini) API key
 - OpenRouter API key
 - Groq API key
 
@@ -173,6 +172,11 @@ npm install
 ### 3. Configure environment variables
 Create a `.env.local` file:
 ```env
+# AI API Keys
+GEMINI_API_KEY=your_gemini_key
+OPENROUTER_API_KEY=your_openrouter_key
+GROQ_API_KEY=your_groq_key
+
 # Firebase Configuration
 NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
@@ -181,9 +185,12 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
-# AI API Keys
-OPENROUTER_API_KEY=your_openrouter_key
-GROQ_API_KEY=your_groq_key
+# App URL
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Admin Credentials (Optional)
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=secure_password
 ```
 
 ### 4. Run the development server
@@ -198,34 +205,34 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## 🎯 Features Deep Dive
 
 ### 🤖 AI-Powered Generation
-- **Multiple Models**: Switch between AI models for different results
-- **Streaming**: Real-time code generation with SSE
-- **Smart Prompts**: Enhanced prompt processing for better outputs
+- **Multi-Model Support**: Access state-of-the-art models like Gemini 2.5 Flash for superior code generation.
+- **Smart Streaming**: Experience zero-latency code generation with direct SSE streams.
+- **Context Awareness**: The AI understands your project structure and style preferences.
 
 ### 🎨 Visual Editor
-- **Click-to-Edit**: Select any element to modify
-- **Color Pickers**: Intuitive color selection for background and text
-- **Live Preview**: See changes instantly
-- **Responsive Testing**: Preview on different device sizes
+- **Click-to-Edit**: Select any element to modify properties visually.
+- **Color Pickers**: Intuitive color selection for background, text, and borders.
+- **Live Preview**: See changes instantly as you type or click.
+- **Responsive Testing**: Toggle between Desktop, Tablet, and Mobile views to ensure responsiveness.
 
 ### 💬 Chat Revisions
-- **Conversational AI**: Describe changes naturally
-- **Code Streaming**: Watch modifications in real-time
-- **Version History**: Revert to any previous version
+- **Conversational AI**: Describe changes naturally (e.g., "Make the header blue", "Add a contact form").
+- **Code Streaming**: Watch the AI modify your code in real-time.
+- **Rollback**: Easily revert to any previous version if you change your mind.
 
 ### 🌐 Publishing & Sharing
-- **One-Click Publish**: Share your creations instantly
-- **Community Gallery**: Explore projects from other users
-- **Model Badges**: See which AI model created each project
+- **Instant Hosting**: Publish your site with one click.
+- **Community Gallery**: Showcase your work and remix other users' projects.
+- **Model Attribution**: Badges show which AI model power-lifted your project.
 
 ---
 
 ## 🔐 Security Features
 
-- **Firebase Authentication**: Secure Google Sign-in
-- **Admin System**: Special privileges for administrators
-- **Credit System**: Usage-based credits with admin bypass
-- **Secure API Routes**: Protected backend endpoints
+- **Firebase Authentication**: Secure Google Sign-in integration.
+- **Admin System**: Role-based access control with admin privileges.
+- **Credit System**: Fair usage limits with admin bypass capabilities.
+- **Secure API Routes**: Server-side validation and protection.
 
 ---
 

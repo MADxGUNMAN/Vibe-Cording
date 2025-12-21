@@ -912,7 +912,7 @@ export default function EditorPage() {
                     </div>
 
                     {/* Input - Single compact row */}
-                    <div className="p-2 border-t border-white/10 flex-shrink-0 overflow-hidden">
+                    <div className="p-2 border-t border-white/10 flex-shrink-0">
                         <div className="flex gap-1 items-center">
                             {/* Compact Model Selector */}
                             <div className="relative flex-shrink-0">
