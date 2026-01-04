@@ -53,6 +53,7 @@ export default function EditorPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const pendingCodeRef = useRef<string>('');  // Store pending changes without re-render
+    const pendingChangesRef = useRef<{ xpath: string; changes: Record<string, string> }[]>([]); // Track individual element changes
     const codeContainerRef = useRef<HTMLDivElement>(null); // For auto-scroll
     const projectId = params.id as string;
 
@@ -213,10 +214,11 @@ export default function EditorPage() {
                     // Update selection highlight position
                     updateSelect(selectedEl);
                     
-                    // Send back updated HTML
+                    // Send back change details instead of entire HTML
                     window.parent.postMessage({
-                        type: 'htmlUpdated',
-                        html: document.documentElement.outerHTML
+                        type: 'elementChanged',
+                        xpath: getXPath(selectedEl),
+                        changes: updates
                     }, '*');
                 }
                 
@@ -303,18 +305,13 @@ export default function EditorPage() {
                     xpath: e.data.xpath
                 });
                 setShowEditPanel(true);
-            } else if (e.data.type === 'htmlUpdated') {
-                // Store updated HTML in ref without triggering re-render
-                // This prevents iframe from re-rendering while editing
-                let cleanHtml = e.data.html;
-
-                // Remove injected script using markers
-                cleanHtml = cleanHtml.replace(/<!-- VIBE_EDIT_SCRIPT_START -->[\s\S]*?<!-- VIBE_EDIT_SCRIPT_END -->/g, '');
-
-                // Remove highlight divs with data attribute markers
-                cleanHtml = cleanHtml.replace(/<div data-vibe-highlight[^>]*><\/div>/g, '');
-
-                pendingCodeRef.current = cleanHtml;
+            } else if (e.data.type === 'elementChanged') {
+                // Track the change without capturing entire DOM
+                // Changes will be applied to source code when saved
+                pendingChangesRef.current.push({
+                    xpath: e.data.xpath,
+                    changes: e.data.changes
+                });
             }
         }
 
@@ -381,6 +378,72 @@ export default function EditorPage() {
         return '#000000';
     };
 
+    // Helper function to apply style changes to HTML source code
+    // Uses DOMParser for reliable element lookup and modification
+    const applyChangesToHtml = (html: string, changes: { xpath: string; changes: Record<string, string> }[]): string => {
+        if (changes.length === 0) return html;
+
+        // Parse the HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        for (const change of changes) {
+            try {
+                const updates = change.changes;
+                const xpath = change.xpath;
+
+                // Find element by xpath
+                const xpathResult = doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                const element = xpathResult.singleNodeValue as HTMLElement;
+
+                if (!element) {
+                    console.warn('Element not found for xpath:', xpath);
+                    continue;
+                }
+
+                // Apply text content changes
+                if (updates.textContent !== undefined && element.childNodes.length <= 1) {
+                    element.textContent = updates.textContent;
+                }
+
+                // Apply class changes
+                if (updates.className !== undefined) {
+                    element.className = updates.className;
+                }
+
+                // Apply href/src changes
+                if (updates.href !== undefined && element.tagName === 'A') {
+                    element.setAttribute('href', updates.href);
+                }
+                if (updates.src !== undefined && element.tagName === 'IMG') {
+                    element.setAttribute('src', updates.src);
+                }
+
+                // Apply style changes
+                const styleChanges: string[] = [];
+                if (updates.padding !== undefined) styleChanges.push(`padding: ${updates.padding}`);
+                if (updates.margin !== undefined) styleChanges.push(`margin: ${updates.margin}`);
+                if (updates.fontSize !== undefined) styleChanges.push(`font-size: ${updates.fontSize}`);
+                if (updates.color !== undefined) styleChanges.push(`color: ${updates.color}`);
+                if (updates.backgroundColor !== undefined) styleChanges.push(`background-color: ${updates.backgroundColor}`);
+
+                if (styleChanges.length > 0) {
+                    const existingStyle = element.getAttribute('style') || '';
+                    const newStyle = existingStyle ? `${existingStyle}; ${styleChanges.join('; ')}` : styleChanges.join('; ');
+                    element.setAttribute('style', newStyle);
+                }
+
+            } catch (e) {
+                console.warn('Failed to apply change:', change, e);
+            }
+        }
+
+        // Return the modified HTML
+        // Note: This normalizes formatting but reliably applies changes
+        const doctype = '<!DOCTYPE html>';
+        return `${doctype}\n${doc.documentElement.outerHTML}`;
+    };
+
     const handleElementUpdate = (field: keyof SelectedElement, value: string) => {
         if (!selectedElement) return;
 
@@ -396,17 +459,26 @@ export default function EditorPage() {
     const handleSaveChanges = async () => {
         if (!projectId) return;
 
-        // Use pending code if available, otherwise use current code
-        const codeToSave = pendingCodeRef.current || currentCode;
-        if (!codeToSave) return;
+        // Check if we have pending changes
+        if (pendingChangesRef.current.length === 0) {
+            // No changes to save
+            setShowEditPanel(false);
+            setSelectedElement(null);
+            setEditMode(false);
+            return;
+        }
 
         setSaving(true);
         try {
-            await updateProject(projectId, { current_code: codeToSave });
-            await addVersion(projectId, codeToSave, 'Visual edit');
+            // Apply tracked changes to the original source code
+            const updatedCode = applyChangesToHtml(currentCode, pendingChangesRef.current);
+
+            await updateProject(projectId, { current_code: updatedCode });
+            await addVersion(projectId, updatedCode, 'Visual edit');
 
             // Update currentCode with the saved changes
-            setCurrentCode(codeToSave);
+            setCurrentCode(updatedCode);
+            pendingChangesRef.current = []; // Clear pending changes
             pendingCodeRef.current = '';
 
             // Refresh versions
