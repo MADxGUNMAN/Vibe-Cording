@@ -20,6 +20,12 @@ const openrouter = new OpenAI({
     },
 });
 
+// Initialize NVIDIA client (OpenAI-compatible)
+const nvidia = new OpenAI({
+    baseURL: "https://integrate.api.nvidia.com/v1",
+    apiKey: process.env.NVIDIA_API_KEY || "",
+});
+
 // Initialize Gemini clients with fallback keys
 const GEMINI_API_KEYS = [
     process.env.GEMINI_API_KEY || "",
@@ -286,6 +292,16 @@ export async function POST(request: NextRequest) {
                             await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Switching to backup API key ${keyIndex + 1}...` })}\n\n`);
                         }
                     ) || prompt;
+                } else if (modelInfo.provider === 'nvidia') {
+                    const enhanceResponse = await nvidia.chat.completions.create({
+                        model: model,
+                        messages: [
+                            { role: "system", content: ENHANCE_PROMPT_SYSTEM + styleInstruction },
+                            { role: "user", content: prompt }
+                        ],
+                        max_tokens: 1000,
+                    });
+                    enhancedPrompt = enhanceResponse.choices[0]?.message?.content || prompt;
                 } else if (modelInfo.provider === 'openrouter') {
                     const enhanceResponse = await openrouter.chat.completions.create({
                         model: model,
@@ -333,6 +349,26 @@ export async function POST(request: NextRequest) {
                 );
 
                 for await (const content of streamGenerator) {
+                    if (content) {
+                        fullCode += content;
+                        await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);
+                    }
+                }
+            } else if (modelInfo.provider === 'nvidia') {
+                const generateResponse = await nvidia.chat.completions.create({
+                    model: model,
+                    messages: [
+                        { role: "system", content: GENERATE_CODE_SYSTEM },
+                        { role: "user", content: enhancedPrompt }
+                    ],
+                    max_tokens: 16384,
+                    temperature: 1.00,
+                    top_p: 1.00,
+                    stream: true,
+                });
+
+                for await (const chunk of generateResponse) {
+                    const content = chunk.choices[0]?.delta?.content || '';
                     if (content) {
                         fullCode += content;
                         await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);

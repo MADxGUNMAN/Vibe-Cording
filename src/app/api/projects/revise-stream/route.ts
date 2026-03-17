@@ -23,10 +23,16 @@ const openrouter = new OpenAI({
 // Initialize Gemini client
 const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
+// Initialize NVIDIA client (OpenAI-compatible)
+const nvidia = new OpenAI({
+    baseURL: "https://integrate.api.nvidia.com/v1",
+    apiKey: process.env.NVIDIA_API_KEY || "",
+});
+
 // Helper to get correct provider based on model
-function getModelProvider(modelId: string): 'gemini' | 'groq' | 'openrouter' {
+function getModelProvider(modelId: string): 'gemini' | 'groq' | 'openrouter' | 'nvidia' {
     const model = AVAILABLE_MODELS.find(m => m.id === modelId);
-    return model?.provider as 'gemini' | 'groq' | 'openrouter' || 'openrouter';
+    return model?.provider as 'gemini' | 'groq' | 'openrouter' | 'nvidia' || 'openrouter';
 }
 
 const ENHANCE_REVISION_SYSTEM = `You are an expert web design consultant specializing in website revisions and improvements. Transform the user's revision request into a detailed, actionable specification.
@@ -121,6 +127,16 @@ export async function POST(request: NextRequest) {
                         `${ENHANCE_REVISION_SYSTEM}\n\nUser request: ${message}`
                     );
                     enhancedRevision = enhanceResult.response.text() || message;
+                } else if (provider === 'nvidia') {
+                    const enhanceResponse = await nvidia.chat.completions.create({
+                        model: useModel,
+                        messages: [
+                            { role: "system", content: ENHANCE_REVISION_SYSTEM },
+                            { role: "user", content: message }
+                        ],
+                        max_tokens: 500,
+                    });
+                    enhancedRevision = enhanceResponse.choices[0]?.message?.content || message;
                 } else if (provider === 'groq') {
                     const enhanceResponse = await groq.chat.completions.create({
                         model: useModel,
@@ -159,6 +175,26 @@ export async function POST(request: NextRequest) {
 
                     for await (const chunk of generateStream.stream) {
                         const content = chunk.text();
+                        if (content) {
+                            fullCode += content;
+                            controller.enqueue(sendEvent({ type: 'code', content }));
+                        }
+                    }
+                } else if (provider === 'nvidia') {
+                    const generateStream = await nvidia.chat.completions.create({
+                        model: useModel,
+                        messages: [
+                            { role: "system", content: GENERATE_REVISION_SYSTEM },
+                            { role: "user", content: `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}` }
+                        ],
+                        max_tokens: 16384,
+                        temperature: 1.00,
+                        top_p: 1.00,
+                        stream: true,
+                    });
+
+                    for await (const chunk of generateStream) {
+                        const content = chunk.choices[0]?.delta?.content || '';
                         if (content) {
                             fullCode += content;
                             controller.enqueue(sendEvent({ type: 'code', content }));

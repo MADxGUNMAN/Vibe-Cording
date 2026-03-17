@@ -8,6 +8,9 @@ export const AVAILABLE_MODELS = [
     { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
     { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Groq model', provider: 'groq', tier: 'Fast', color: 'green' },
     { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Groq instant model', provider: 'groq', tier: 'Fast', color: 'green' },
+    { id: 'moonshotai/kimi-k2.5', name: 'Kimi K2.5', description: 'NVIDIA Kimi K2.5 thinking model', provider: 'nvidia', tier: 'Most Powerful', color: 'purple' },
+    { id: 'minimaxai/minimax-m2.5', name: 'MiniMax M2.5', description: 'NVIDIA MiniMax M2.5 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
+    { id: 'z-ai/glm5', name: 'GLM 5', description: 'NVIDIA GLM 5 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
 ];
 
 export type ModelInfo = typeof AVAILABLE_MODELS[number];
