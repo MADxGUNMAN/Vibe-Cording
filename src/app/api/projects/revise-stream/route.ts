@@ -240,6 +240,7 @@ export async function POST(request: NextRequest) {
 
                 // Clean up the code
                 let cleanCode = fullCode
+                    .replace(/<think>[\s\S]*?<\/think>/gi, '')
                     .replace(/```html\n?/g, '')
                     .replace(/```\n?/g, '')
                     .trim();
