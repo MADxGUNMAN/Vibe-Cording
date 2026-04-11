@@ -4,25 +4,27 @@ import Link from 'next/link';
 import { useAuth } from './AuthProvider';
 import { useActiveGenerations } from './ActiveGenerationsProvider';
 import { useState } from 'react';
+import { ProfileSettingsModal } from './profile/ProfileSettingsModal';
+import { LogoIcon } from './icons';
 
 export default function Header() {
     const { user, userData, loading, signOut } = useAuth();
     const { activeGenerations } = useActiveGenerations();
     const [showDropdown, setShowDropdown] = useState(false);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
+    const [showProfileSettings, setShowProfileSettings] = useState(false);
 
     const ongoingCount = activeGenerations.filter(g => g.status !== 'complete' && g.status !== 'error').length;
 
     return (
+        <>
         <header className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0f]/80 backdrop-blur-md border-b border-white/5">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
                     <Link href="/" className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                            </svg>
+                            <LogoIcon className="w-5 h-5 text-white" />
                         </div>
                         <span className="text-xl font-bold text-white">Vibe Coder</span>
                     </Link>
@@ -97,40 +99,56 @@ export default function Header() {
                                         onClick={() => setShowDropdown(!showDropdown)}
                                         className="flex items-center gap-2 focus:outline-none"
                                     >
-                                        {user.photoURL ? (
+                                        {(userData?.imageUrl || user.photoURL) ? (
                                             <img
-                                                src={user.photoURL}
-                                                alt={user.displayName || 'User'}
+                                                src={userData?.imageUrl || user.photoURL || ''}
+                                                alt={userData?.name || user.displayName || 'User'}
                                                 className="w-8 h-8 rounded-full border border-white/10 object-cover"
                                                 referrerPolicy="no-referrer"
                                                 onError={(e) => {
-                                                    // Fallback to initial if image fails to load
                                                     const target = e.target as HTMLImageElement;
                                                     target.style.display = 'none';
                                                     target.nextElementSibling?.classList.remove('hidden');
                                                 }}
                                             />
                                         ) : null}
-                                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium ${user.photoURL ? 'hidden' : ''}`}>
-                                            {user.displayName?.[0] || user.email?.[0] || 'U'}
+                                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium ${(userData?.imageUrl || user.photoURL) ? 'hidden' : ''}`}>
+                                            {userData?.name?.[0] || user.displayName?.[0] || user.email?.[0] || 'U'}
                                         </div>
                                     </button>
 
                                     {showDropdown && (
-                                        <div className="absolute right-0 mt-2 w-48 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl py-1 z-50">
-                                            <div className="px-4 py-2 border-b border-white/10">
-                                                <p className="text-sm text-white font-medium truncate">{user.displayName}</p>
+                                        <div className="absolute right-0 mt-2 w-52 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-xl py-1 z-50">
+                                            <div className="px-4 py-3 border-b border-white/10">
+                                                <p className="text-sm text-white font-medium truncate">{userData?.name || user.displayName}</p>
                                                 <p className="text-xs text-gray-400 truncate">{user.email}</p>
                                             </div>
                                             <button
                                                 onClick={() => {
-                                                    signOut();
+                                                    setShowProfileSettings(true);
                                                     setShowDropdown(false);
                                                 }}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 transition-colors"
+                                                className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors flex items-center gap-2.5"
                                             >
-                                                Sign out
+                                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                </svg>
+                                                Profile Settings
                                             </button>
+                                            <div className="border-t border-white/5">
+                                                <button
+                                                    onClick={() => {
+                                                        signOut();
+                                                        setShowDropdown(false);
+                                                    }}
+                                                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2.5"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                                    </svg>
+                                                    Sign out
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -252,5 +270,20 @@ export default function Header() {
                 </div>
             )}
         </header>
+
+            {/* Profile Settings Modal */}
+            <ProfileSettingsModal
+                isOpen={showProfileSettings}
+                onClose={() => setShowProfileSettings(false)}
+            />
+
+            {/* Click outside to close dropdown */}
+            {showDropdown && (
+                <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowDropdown(false)}
+                />
+            )}
+        </>
     );
 }

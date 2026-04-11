@@ -10,7 +10,8 @@ import {
     createUserWithEmailAndPassword,
     updateProfile
 } from 'firebase/auth';
-import { auth, googleProvider } from '@/lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db, googleProvider } from '@/lib/firebase';
 import { createUser, getUser, User } from '@/lib/firestore';
 
 interface AuthContextType {
@@ -22,6 +23,7 @@ interface AuthContextType {
     signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
     signOut: () => Promise<void>;
     refreshUserData: () => Promise<void>;
+    updateUserProfile: (displayName: string, photoURL?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -126,6 +128,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    // Update user profile (display name and photo)
+    const updateUserProfile = useCallback(async (displayName: string, photoURL?: string) => {
+        if (!auth.currentUser) return;
+
+        try {
+            // Update Firebase Auth profile
+            await updateProfile(auth.currentUser, { displayName, photoURL });
+
+            // Update Firestore user document
+            const userRef = doc(db, 'users', auth.currentUser.uid);
+            await setDoc(userRef, { 
+                name: displayName, 
+                imageUrl: photoURL || null 
+            }, { merge: true });
+
+            // Update local state
+            setUser(auth.currentUser);
+            if (userData) {
+                setUserData({
+                    ...userData,
+                    name: displayName,
+                    imageUrl: photoURL,
+                });
+            }
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            throw error;
+        }
+    }, [userData]);
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -135,7 +167,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             signInWithEmail,
             signUpWithEmail,
             signOut,
-            refreshUserData
+            refreshUserData,
+            updateUserProfile
         }}>
             {children}
         </AuthContext.Provider>
