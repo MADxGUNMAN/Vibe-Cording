@@ -388,8 +388,8 @@ export async function POST(request: NextRequest) {
                         { role: "user", content: enhancedPrompt }
                     ],
                     max_tokens: 16384,
-                    temperature: 1.00,
-                    top_p: 1.00,
+                    temperature: 0.6,
+                    top_p: 0.95,
                     stream: true,
                 });
 

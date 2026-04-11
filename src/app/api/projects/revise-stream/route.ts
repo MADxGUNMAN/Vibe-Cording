@@ -148,20 +148,103 @@ export async function POST(request: NextRequest) {
 
                 let fullCode = '';
 
+                // --- Stream filter: strips thinking blocks, markdown fences, and buffers until HTML starts ---
+                let htmlStarted = false;
+                let preHtmlBuffer = '';
+                let insideThinkBlock = false;
+                let thinkBuffer = '';
+
+                function emitCodeContent(rawChunk: string) {
+                    let remaining = rawChunk;
+
+                    // Handle <think> blocks — route to chat instead of code
+                    while (remaining.length > 0) {
+                        if (insideThinkBlock) {
+                            const closeIdx = remaining.indexOf('</think>');
+                            if (closeIdx !== -1) {
+                                thinkBuffer += remaining.substring(0, closeIdx);
+                                remaining = remaining.substring(closeIdx + 8);
+                                insideThinkBlock = false;
+                                // Route thinking to chat
+                                if (thinkBuffer.trim()) {
+                                    controller.enqueue(sendEvent({ type: 'message', content: `💭 ${thinkBuffer.trim().substring(0, 200)}` }));
+                                }
+                                thinkBuffer = '';
+                            } else {
+                                thinkBuffer += remaining;
+                                return; // Still inside think block, wait for more
+                            }
+                        } else {
+                            const openIdx = remaining.indexOf('<think>');
+                            if (openIdx !== -1) {
+                                const before = remaining.substring(0, openIdx);
+                                if (before) processCodeChunk(before);
+                                remaining = remaining.substring(openIdx + 7);
+                                insideThinkBlock = true;
+                            } else {
+                                // Check for partial <think at end of chunk
+                                const partialMatch = remaining.match(/<t(?:h(?:i(?:n(?:k)?)?)?)?$/);
+                                if (partialMatch) {
+                                    const safe = remaining.substring(0, partialMatch.index);
+                                    if (safe) processCodeChunk(safe);
+                                    preHtmlBuffer += partialMatch[0]; // Save partial for next chunk
+                                    return;
+                                }
+                                processCodeChunk(remaining);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                function processCodeChunk(chunk: string) {
+                    if (!htmlStarted) {
+                        preHtmlBuffer += chunk;
+                        // Check if we've found the start of actual HTML
+                        const doctypeIdx = preHtmlBuffer.indexOf('<!DOCTYPE');
+                        const htmlIdx = preHtmlBuffer.indexOf('<html');
+                        const startIdx = doctypeIdx !== -1 ? doctypeIdx : htmlIdx;
+
+                        if (startIdx !== -1) {
+                            htmlStarted = true;
+                            // Anything before HTML start is non-code (thinking/intro text)
+                            const nonCode = preHtmlBuffer.substring(0, startIdx).trim();
+                            if (nonCode) {
+                                controller.enqueue(sendEvent({ type: 'message', content: `💭 ${nonCode.substring(0, 200)}` }));
+                            }
+                            const codeContent = preHtmlBuffer.substring(startIdx);
+                            fullCode += codeContent;
+                            controller.enqueue(sendEvent({ type: 'code', content: codeContent }));
+                            preHtmlBuffer = '';
+                        }
+                        // If buffer is getting very large without HTML, something is wrong — flush it
+                        if (!htmlStarted && preHtmlBuffer.length > 500) {
+                            // Assume it's all code anyway
+                            htmlStarted = true;
+                            fullCode += preHtmlBuffer;
+                            controller.enqueue(sendEvent({ type: 'code', content: preHtmlBuffer }));
+                            preHtmlBuffer = '';
+                        }
+                    } else {
+                        fullCode += chunk;
+                        controller.enqueue(sendEvent({ type: 'code', content: chunk }));
+                    }
+                }
+                // --- End stream filter ---
+
+                const revisionUserPrompt = `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}`;
+
                 if (provider === 'gemini') {
                     const geminiModel = gemini.getGenerativeModel({
                         model: useModel,
                         systemInstruction: GENERATE_REVISION_SYSTEM(),
                     });
-                    const generateStream = await geminiModel.generateContentStream(
-                        `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}`
-                    );
+                    const generateStream = await geminiModel.generateContentStream(revisionUserPrompt);
 
                     for await (const chunk of generateStream.stream) {
                         const content = chunk.text();
                         if (content) {
-                            fullCode += content;
-                            controller.enqueue(sendEvent({ type: 'code', content }));
+                            emitCodeContent(content);
                         }
                     }
                 } else if (provider === 'nvidia') {
@@ -169,19 +252,18 @@ export async function POST(request: NextRequest) {
                         model: useModel,
                         messages: [
                             { role: "system", content: GENERATE_REVISION_SYSTEM() },
-                            { role: "user", content: `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}` }
+                            { role: "user", content: revisionUserPrompt }
                         ],
                         max_tokens: 16384,
-                        temperature: 1.00,
-                        top_p: 1.00,
+                        temperature: 0.6,
+                        top_p: 0.95,
                         stream: true,
                     });
 
                     for await (const chunk of generateStream) {
                         const content = chunk.choices[0]?.delta?.content || '';
                         if (content) {
-                            fullCode += content;
-                            controller.enqueue(sendEvent({ type: 'code', content }));
+                            emitCodeContent(content);
                         }
                     }
                 } else if (provider === 'groq') {
@@ -189,7 +271,7 @@ export async function POST(request: NextRequest) {
                         model: useModel,
                         messages: [
                             { role: "system", content: GENERATE_REVISION_SYSTEM() },
-                            { role: "user", content: `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}` }
+                            { role: "user", content: revisionUserPrompt }
                         ],
                         max_tokens: 8000,
                         stream: true,
@@ -198,8 +280,7 @@ export async function POST(request: NextRequest) {
                     for await (const chunk of generateStream) {
                         const content = chunk.choices[0]?.delta?.content || '';
                         if (content) {
-                            fullCode += content;
-                            controller.enqueue(sendEvent({ type: 'code', content }));
+                            emitCodeContent(content);
                         }
                     }
                 } else {
@@ -207,7 +288,7 @@ export async function POST(request: NextRequest) {
                         model: useModel,
                         messages: [
                             { role: "system", content: GENERATE_REVISION_SYSTEM() },
-                            { role: "user", content: `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}` }
+                            { role: "user", content: revisionUserPrompt }
                         ],
                         max_tokens: 16000,
                         stream: true,
@@ -216,10 +297,14 @@ export async function POST(request: NextRequest) {
                     for await (const chunk of generateStream) {
                         const content = chunk.choices[0]?.delta?.content || '';
                         if (content) {
-                            fullCode += content;
-                            controller.enqueue(sendEvent({ type: 'code', content }));
+                            emitCodeContent(content);
                         }
                     }
+                }
+
+                // Flush any remaining buffer
+                if (preHtmlBuffer.trim()) {
+                    fullCode += preHtmlBuffer;
                 }
 
                 // Clean up the code
@@ -248,9 +333,10 @@ export async function POST(request: NextRequest) {
                 }));
                 controller.close();
 
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Error creating revision:', error);
-                controller.enqueue(sendEvent({ type: 'error', error: 'Failed to revise project' }));
+                const errorMessage = error?.message || error?.error?.message || 'Failed to revise project';
+                controller.enqueue(sendEvent({ type: 'error', error: `Revision failed: ${errorMessage}` }));
                 controller.close();
             }
         }
