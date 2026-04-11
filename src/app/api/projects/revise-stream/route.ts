@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getProject, updateProject, addMessage, addVersion, getUser, updateUserCredits } from '@/lib/firestore';
 import { AVAILABLE_MODELS } from '@/lib/models';
+import { ENHANCE_REVISION_SYSTEM, GENERATE_REVISION_SYSTEM } from '@/prompts';
 
 // Initialize Groq client
 const groq = new Groq({
@@ -35,31 +36,8 @@ function getModelProvider(modelId: string): 'gemini' | 'groq' | 'openrouter' | '
     return model?.provider as 'gemini' | 'groq' | 'openrouter' | 'nvidia' || 'openrouter';
 }
 
-const ENHANCE_REVISION_SYSTEM = `You are an expert web design consultant specializing in website revisions and improvements. Transform the user's revision request into a detailed, actionable specification.
-
-When enhancing a revision request, include:
-1. **Specific Elements**: Identify exactly which HTML elements, sections, or components to modify
-2. **Design Details**: Specify exact colors (hex codes), spacing (px/rem values), typography changes, and visual effects
-3. **Technical Implementation**: Mention specific Tailwind classes, CSS properties, or JavaScript behaviors to add/modify
-4. **Visual Outcome**: Describe the expected visual result clearly
-5. **Responsive Considerations**: Note any mobile/tablet/desktop specific changes needed
-6. **Animation/Interaction**: Specify any hover effects, transitions, or animations to add
-
-Transform the simple request into a comprehensive revision specification (2-3 detailed sentences covering all relevant aspects). Be specific enough that the changes can be implemented precisely and consistently.
-
-Return ONLY the enhanced revision specification, nothing else.`;
-
-const GENERATE_REVISION_SYSTEM = `You are an expert web developer.
-
-CRITICAL REQUIREMENTS:
-- Return ONLY the complete updated HTML code with the requested changes.
-- Use Tailwind CSS for ALL styling (NO custom CSS).
-- Use Tailwind utility classes for all styling changes.
-- Include all JavaScript in <script> tags before closing </body>
-- Make sure it's a complete, standalone HTML document with Tailwind CSS
-- Return the HTML Code Only, nothing else
-
-Apply the requested changes while maintaining the Tailwind CSS styling approach.`;
+// System prompts are loaded from src/prompts/*.md files
+// Edit those files directly to modify AI behavior
 
 export async function POST(request: NextRequest) {
     const encoder = new TextEncoder();
@@ -122,16 +100,19 @@ export async function POST(request: NextRequest) {
                 let enhancedRevision: string;
 
                 if (provider === 'gemini') {
-                    const geminiModel = gemini.getGenerativeModel({ model: useModel });
+                    const geminiModel = gemini.getGenerativeModel({
+                        model: useModel,
+                        systemInstruction: ENHANCE_REVISION_SYSTEM(),
+                    });
                     const enhanceResult = await geminiModel.generateContent(
-                        `${ENHANCE_REVISION_SYSTEM}\n\nUser request: ${message}`
+                        `User request: ${message}`
                     );
                     enhancedRevision = enhanceResult.response.text() || message;
                 } else if (provider === 'nvidia') {
                     const enhanceResponse = await nvidia.chat.completions.create({
                         model: useModel,
                         messages: [
-                            { role: "system", content: ENHANCE_REVISION_SYSTEM },
+                            { role: "system", content: ENHANCE_REVISION_SYSTEM() },
                             { role: "user", content: message }
                         ],
                         max_tokens: 500,
@@ -141,7 +122,7 @@ export async function POST(request: NextRequest) {
                     const enhanceResponse = await groq.chat.completions.create({
                         model: useModel,
                         messages: [
-                            { role: "system", content: ENHANCE_REVISION_SYSTEM },
+                            { role: "system", content: ENHANCE_REVISION_SYSTEM() },
                             { role: "user", content: message }
                         ],
                         max_tokens: 500,
@@ -151,7 +132,7 @@ export async function POST(request: NextRequest) {
                     const enhanceResponse = await openrouter.chat.completions.create({
                         model: useModel,
                         messages: [
-                            { role: "system", content: ENHANCE_REVISION_SYSTEM },
+                            { role: "system", content: ENHANCE_REVISION_SYSTEM() },
                             { role: "user", content: message }
                         ],
                         max_tokens: 500,
@@ -168,9 +149,12 @@ export async function POST(request: NextRequest) {
                 let fullCode = '';
 
                 if (provider === 'gemini') {
-                    const geminiModel = gemini.getGenerativeModel({ model: useModel });
+                    const geminiModel = gemini.getGenerativeModel({
+                        model: useModel,
+                        systemInstruction: GENERATE_REVISION_SYSTEM(),
+                    });
                     const generateStream = await geminiModel.generateContentStream(
-                        `${GENERATE_REVISION_SYSTEM}\n\nCurrent website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}`
+                        `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}`
                     );
 
                     for await (const chunk of generateStream.stream) {
@@ -184,7 +168,7 @@ export async function POST(request: NextRequest) {
                     const generateStream = await nvidia.chat.completions.create({
                         model: useModel,
                         messages: [
-                            { role: "system", content: GENERATE_REVISION_SYSTEM },
+                            { role: "system", content: GENERATE_REVISION_SYSTEM() },
                             { role: "user", content: `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}` }
                         ],
                         max_tokens: 16384,
@@ -204,7 +188,7 @@ export async function POST(request: NextRequest) {
                     const generateStream = await groq.chat.completions.create({
                         model: useModel,
                         messages: [
-                            { role: "system", content: GENERATE_REVISION_SYSTEM },
+                            { role: "system", content: GENERATE_REVISION_SYSTEM() },
                             { role: "user", content: `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}` }
                         ],
                         max_tokens: 8000,
@@ -222,7 +206,7 @@ export async function POST(request: NextRequest) {
                     const generateStream = await openrouter.chat.completions.create({
                         model: useModel,
                         messages: [
-                            { role: "system", content: GENERATE_REVISION_SYSTEM },
+                            { role: "system", content: GENERATE_REVISION_SYSTEM() },
                             { role: "user", content: `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}` }
                         ],
                         max_tokens: 16000,

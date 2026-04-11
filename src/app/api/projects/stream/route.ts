@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createProject, addMessage, addVersion, incrementUserCreation, getUser } from '@/lib/firestore';
 import { AVAILABLE_MODELS } from '@/lib/models';
+import { ENHANCE_PROMPT_SYSTEM, GENERATE_CODE_SYSTEM } from '@/prompts';
 
 // Initialize Groq client
 const groq = new Groq({
@@ -55,13 +56,18 @@ function isRetryableGeminiError(error: any): boolean {
 async function generateWithGeminiFallback(
     model: string,
     prompt: string,
-    onKeySwitch?: (keyIndex: number) => void
+    onKeySwitch?: (keyIndex: number) => void,
+    systemInstruction?: string
 ): Promise<string> {
     let lastError: any;
 
     for (let i = 0; i < geminiClients.length; i++) {
         try {
-            const geminiModel = geminiClients[i].getGenerativeModel({ model });
+            const modelConfig: any = { model };
+            if (systemInstruction) {
+                modelConfig.systemInstruction = systemInstruction;
+            }
+            const geminiModel = geminiClients[i].getGenerativeModel(modelConfig);
             const result = await geminiModel.generateContent(prompt);
             return result.response.text() || '';
         } catch (error: any) {
@@ -87,13 +93,18 @@ async function generateWithGeminiFallback(
 async function* streamWithGeminiFallback(
     model: string,
     prompt: string,
-    onKeySwitch?: (keyIndex: number) => void
+    onKeySwitch?: (keyIndex: number) => void,
+    systemInstruction?: string
 ): AsyncGenerator<string, void, unknown> {
     let lastError: any;
 
     for (let i = 0; i < geminiClients.length; i++) {
         try {
-            const geminiModel = geminiClients[i].getGenerativeModel({ model });
+            const modelConfig: any = { model };
+            if (systemInstruction) {
+                modelConfig.systemInstruction = systemInstruction;
+            }
+            const geminiModel = geminiClients[i].getGenerativeModel(modelConfig);
             const streamResult = await geminiModel.generateContentStream(prompt);
 
             for await (const chunk of streamResult.stream) {
@@ -123,78 +134,8 @@ async function* streamWithGeminiFallback(
 export { AVAILABLE_MODELS };
 
 
-const ENHANCE_PROMPT_SYSTEM = `You are an expert web design consultant and prompt enhancement specialist. Your job is to transform simple website requests into comprehensive, production-ready design specifications that will result in stunning, professional websites.
-
-When enhancing a prompt, you MUST include ALL of the following in detail:
-
-**1. DESIGN SYSTEM & VISUAL IDENTITY:**
-- Exact color palette with specific hex codes (primary, secondary, accent, background, text colors)
-- Typography hierarchy (font families for headings and body, sizes, weights, line heights)
-- Visual style (modern minimalist, bold and vibrant, elegant luxury, playful, corporate professional, etc.)
-- Design patterns (glassmorphism, neumorphism, gradient overlays, shadows, rounded corners, etc.)
-- Spacing and layout grid system
-
-**2. COMPLETE PAGE STRUCTURE (specify each section in order):**
-- Hero section (headline style, subtext, CTA buttons, background treatment, imagery/illustration style)
-- Navigation (sticky header, mobile menu style, logo placement, links)
-- Feature/Services section (layout: grid/cards/icons, number of items, content style)
-- About/Story section (layout, imagery, content approach)
-- Testimonials/Social proof (carousel, grid, or featured style)
-- Pricing/Products section if applicable
-- Call-to-action sections
-- Footer (columns, links, social icons, newsletter signup)
-
-**3. INTERACTIVE ELEMENTS & ANIMATIONS:**
-- Hover effects (buttons, cards, links)
-- Scroll animations (fade-in, slide-in, parallax)
-- Micro-interactions (button clicks, form focus states)
-- Loading states and transitions
-- Mobile touch interactions
-
-**4. RESPONSIVE DESIGN REQUIREMENTS:**
-- Desktop layout specifications
-- Tablet adaptations
-- Mobile-first considerations
-- Breakpoint behaviors
-
-**5. CONTENT & COPY GUIDELINES:**
-- Tone of voice (professional, friendly, luxurious, playful)
-- Placeholder text approach (realistic dummy content, not lorem ipsum)
-- Imagery style (photos, illustrations, icons, abstract graphics)
-- Content hierarchy and emphasis
-
-**6. MODERN WEB STANDARDS:**
-- Accessibility considerations (contrast, focus states, semantic HTML)
-- Performance optimization hints
-- SEO-friendly structure
-- Social media integration
-
-Transform the user's simple request into a detailed specification document (4-6 detailed paragraphs) that covers all these aspects. Be specific with colors, layouts, and features. The output should be detailed enough that any developer could create a consistent, production-quality website from it.
-
-Return ONLY the enhanced prompt specification, nothing else.`;
-
-
-const GENERATE_CODE_SYSTEM = `You are an expert web developer. Create a complete, production-ready, single-page website based on the user's request.
-
-CRITICAL REQUIREMENTS:
-- You MUST output valid HTML ONLY.
-- Use Tailwind CSS for ALL styling
-- Include this EXACT script in the <head>: <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-- Use Tailwind utility classes extensively for styling, animations, and responsiveness
-- Make it fully functional and interactive with JavaScript in <script> tag before closing </body>
-- Use modern, beautiful design with great UX using Tailwind classes
-- Make it responsive using Tailwind responsive classes (sm:, md:, lg:, xl:)
-- Use Tailwind animations and transitions (animate-*, transition-*)
-- Include all necessary meta tags
-- Use Google Fonts CDN if needed for custom fonts
-- Use placeholder images from https://placehold.co/600x400
-- Use Tailwind gradient classes for beautiful backgrounds
-- Make sure all buttons, cards, and components use Tailwind styling
-
-CRITICAL RULES:
-1. Return ONLY the HTML code, nothing else.
-2. Do NOT include markdown, explanations, notes, or code fences.
-3. The HTML should be complete and ready to render as-is.`;
+// System prompts are loaded from src/prompts/*.md files
+// Edit those files directly to modify AI behavior
 
 // Helper to get correct client based on model
 function getModelInfo(modelId: string) {
@@ -287,16 +228,17 @@ export async function POST(request: NextRequest) {
                 if (modelInfo.provider === 'gemini') {
                     enhancedPrompt = await generateWithGeminiFallback(
                         model,
-                        `${ENHANCE_PROMPT_SYSTEM}${styleInstruction}\n\nUser request: ${prompt}`,
+                        `User request: ${prompt}`,
                         async (keyIndex) => {
                             await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Switching to backup API key ${keyIndex + 1}...` })}\n\n`);
-                        }
+                        },
+                        ENHANCE_PROMPT_SYSTEM() + styleInstruction
                     ) || prompt;
                 } else if (modelInfo.provider === 'nvidia') {
                     const enhanceResponse = await nvidia.chat.completions.create({
                         model: model,
                         messages: [
-                            { role: "system", content: ENHANCE_PROMPT_SYSTEM + styleInstruction },
+                            { role: "system", content: ENHANCE_PROMPT_SYSTEM() + styleInstruction },
                             { role: "user", content: prompt }
                         ],
                         max_tokens: 1000,
@@ -306,7 +248,7 @@ export async function POST(request: NextRequest) {
                     const enhanceResponse = await openrouter.chat.completions.create({
                         model: model,
                         messages: [
-                            { role: "system", content: ENHANCE_PROMPT_SYSTEM + styleInstruction },
+                            { role: "system", content: ENHANCE_PROMPT_SYSTEM() + styleInstruction },
                             { role: "user", content: prompt }
                         ],
                         max_tokens: 1000,
@@ -316,7 +258,7 @@ export async function POST(request: NextRequest) {
                     const enhanceResponse = await groq.chat.completions.create({
                         model: model,
                         messages: [
-                            { role: "system", content: ENHANCE_PROMPT_SYSTEM + styleInstruction },
+                            { role: "system", content: ENHANCE_PROMPT_SYSTEM() + styleInstruction },
                             { role: "user", content: prompt }
                         ],
                         max_tokens: 1000,
@@ -339,26 +281,110 @@ export async function POST(request: NextRequest) {
             // Generate website with streaming - use appropriate client
             let fullCode = '';
 
+            // Real-time stream filter to handle thinking blocks and markdown fences
+            // Thinking text goes to chat, clean code goes to preview
+            let insideThinkBlock = false;
+            let thinkBuffer = '';
+            let codeStarted = false;
+            let preCodeBuffer = '';
+
+            const processStreamChunk = async (rawContent: string) => {
+                let remaining = rawContent;
+
+                while (remaining.length > 0) {
+                    if (insideThinkBlock) {
+                        // Look for closing </think> tag
+                        const closeIdx = remaining.toLowerCase().indexOf('</think>');
+                        if (closeIdx !== -1) {
+                            thinkBuffer += remaining.substring(0, closeIdx);
+                            remaining = remaining.substring(closeIdx + 8); // skip </think>
+                            insideThinkBlock = false;
+
+                            // Send thinking content to chat panel
+                            if (thinkBuffer.trim()) {
+                                await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `💭 ${thinkBuffer.trim().substring(0, 200)}...` })}\n\n`);
+                            }
+                            thinkBuffer = '';
+                        } else {
+                            // Still inside think block, buffer it
+                            thinkBuffer += remaining;
+                            remaining = '';
+                        }
+                    } else {
+                        // Check for opening <think> tag
+                        const openIdx = remaining.toLowerCase().indexOf('<think>');
+                        if (openIdx !== -1) {
+                            // Process content before the think tag
+                            const beforeThink = remaining.substring(0, openIdx);
+                            if (beforeThink) {
+                                await emitCodeContent(beforeThink);
+                            }
+                            remaining = remaining.substring(openIdx + 7); // skip <think>
+                            insideThinkBlock = true;
+                        } else {
+                            // No think tag, emit as code
+                            await emitCodeContent(remaining);
+                            remaining = '';
+                        }
+                    }
+                }
+            };
+
+            const emitCodeContent = async (content: string) => {
+                if (!codeStarted) {
+                    // Buffer pre-code content until we see actual HTML document start
+                    preCodeBuffer += content;
+
+                    // Strip markdown code fences from the buffer
+                    preCodeBuffer = preCodeBuffer.replace(/^```html\s*\n?/i, '').replace(/^```\s*\n?/, '');
+
+                    // Look for actual HTML document start (<!DOCTYPE or <html)
+                    const lowerBuf = preCodeBuffer.toLowerCase();
+                    let htmlStart = lowerBuf.indexOf('<!doctype');
+                    if (htmlStart === -1) htmlStart = lowerBuf.indexOf('<html');
+                    
+                    if (htmlStart !== -1) {
+                        codeStarted = true;
+
+                        // Send any pre-HTML text to chat as model thinking
+                        const preText = preCodeBuffer.substring(0, htmlStart).trim();
+                        if (preText) {
+                            await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `💭 ${preText.substring(0, 200)}${preText.length > 200 ? '...' : ''}` })}\n\n`);
+                        }
+
+                        // Emit the actual HTML content
+                        const htmlContent = preCodeBuffer.substring(htmlStart);
+                        fullCode += htmlContent;
+                        await safeWrite(`data: ${JSON.stringify({ type: 'code', content: htmlContent })}\n\n`);
+                        preCodeBuffer = '';
+                    }
+                } else {
+                    // Already streaming code, emit directly
+                    fullCode += content;
+                    await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);
+                }
+            };
+
             if (modelInfo.provider === 'gemini') {
                 const streamGenerator = streamWithGeminiFallback(
                     model,
-                    `${GENERATE_CODE_SYSTEM}\n\nUser request: ${enhancedPrompt}`,
+                    `User request: ${enhancedPrompt}`,
                     async (keyIndex) => {
                         await safeWrite(`data: ${JSON.stringify({ type: 'message', content: `Switching to backup API key ${keyIndex + 1}...` })}\n\n`);
-                    }
+                    },
+                    GENERATE_CODE_SYSTEM()
                 );
 
                 for await (const content of streamGenerator) {
                     if (content) {
-                        fullCode += content;
-                        await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);
+                        await processStreamChunk(content);
                     }
                 }
             } else if (modelInfo.provider === 'nvidia') {
                 const generateResponse = await nvidia.chat.completions.create({
                     model: model,
                     messages: [
-                        { role: "system", content: GENERATE_CODE_SYSTEM },
+                        { role: "system", content: GENERATE_CODE_SYSTEM() },
                         { role: "user", content: enhancedPrompt }
                     ],
                     max_tokens: 16384,
@@ -370,15 +396,14 @@ export async function POST(request: NextRequest) {
                 for await (const chunk of generateResponse) {
                     const content = chunk.choices[0]?.delta?.content || '';
                     if (content) {
-                        fullCode += content;
-                        await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);
+                        await processStreamChunk(content);
                     }
                 }
             } else if (modelInfo.provider === 'openrouter') {
                 const generateResponse = await openrouter.chat.completions.create({
                     model: model,
                     messages: [
-                        { role: "system", content: GENERATE_CODE_SYSTEM },
+                        { role: "system", content: GENERATE_CODE_SYSTEM() },
                         { role: "user", content: enhancedPrompt }
                     ],
                     max_tokens: 16000,
@@ -388,15 +413,14 @@ export async function POST(request: NextRequest) {
                 for await (const chunk of generateResponse) {
                     const content = chunk.choices[0]?.delta?.content || '';
                     if (content) {
-                        fullCode += content;
-                        await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);
+                        await processStreamChunk(content);
                     }
                 }
             } else {
                 const generateResponse = await groq.chat.completions.create({
                     model: model,
                     messages: [
-                        { role: "system", content: GENERATE_CODE_SYSTEM },
+                        { role: "system", content: GENERATE_CODE_SYSTEM() },
                         { role: "user", content: enhancedPrompt }
                     ],
                     max_tokens: 16000,
@@ -406,8 +430,7 @@ export async function POST(request: NextRequest) {
                 for await (const chunk of generateResponse) {
                     const content = chunk.choices[0]?.delta?.content || '';
                     if (content) {
-                        fullCode += content;
-                        await safeWrite(`data: ${JSON.stringify({ type: 'code', content })}\n\n`);
+                        await processStreamChunk(content);
                     }
                 }
             }

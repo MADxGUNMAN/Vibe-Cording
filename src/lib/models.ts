@@ -1,6 +1,8 @@
 // Shared model configuration - edit this file to change models across all pages
 export const AVAILABLE_MODELS = [
+    { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'red' },
     { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'Most Powerful', color: 'red' },
+    { id: 'gemma-4-31b-it', name: 'Gemma 4 31B', description: 'Latest Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
     { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Fast', color: 'blue' },
     { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
