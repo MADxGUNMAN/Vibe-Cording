@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enhancePrompt, generateWebsite } from '@/lib/ai';
-import { createProject, addMessage, addVersion, incrementUserCreation, getUser } from '@/lib/firestore';
+import { createProject, addMessage, addVersion, incrementUserCreation, getUser } from '@/lib/firestore-admin';
 
 export async function POST(request: NextRequest) {
     try {

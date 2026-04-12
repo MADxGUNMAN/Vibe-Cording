@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
-import { getProject, getConversation, getVersions, updateProject, publishProject, addVersion, Project, Message, Version } from '@/lib/firestore';
+import { getProject, getConversation, getVersions, updateProject, publishProject, unpublishProject, addVersion, Project, Message, Version } from '@/lib/firestore';
 import { Timestamp } from 'firebase/firestore';
 import { AVAILABLE_MODELS } from '@/lib/models';
 
@@ -676,6 +676,14 @@ export default function EditorPage() {
         alert(project?.isPublished ? 'Website updated successfully!' : 'Project published successfully!');
     };
 
+    const handleUnpublish = async () => {
+        if (!projectId) return;
+        if (!confirm('Are you sure you want to unpublish this project? It will be removed from the community page.')) return;
+        await unpublishProject(projectId);
+        setProject(prev => prev ? { ...prev, isPublished: false, published_code: '' } : prev);
+        alert('Project unpublished successfully!');
+    };
+
     const handleVersionSelect = (version: Version) => {
         setCurrentCode(version.code);
         setShowVersions(false);
@@ -942,7 +950,7 @@ export default function EditorPage() {
                     </button>
                     <button
                         onClick={handlePublish}
-                        className={`px-2 md:px-3 py-1.5 text-white rounded text-sm flex items-center gap-1 flex-shrink-0 ${project.isPublished && project.published_code === currentCode
+                        className={`px-2 md:px-3 py-1.5 text-white rounded-l text-sm flex items-center gap-1 flex-shrink-0 ${project.isPublished && project.published_code === currentCode
                             ? 'bg-green-600 cursor-default'
                             : 'bg-purple-600 hover:bg-purple-700'
                             }`}
@@ -958,6 +966,17 @@ export default function EditorPage() {
                             }
                         </span>
                     </button>
+                    {project.isPublished && (
+                        <button
+                            onClick={handleUnpublish}
+                            className="px-2 py-1.5 bg-red-600/80 hover:bg-red-600 text-white rounded-r text-sm flex items-center gap-1 flex-shrink-0 border-l border-red-700/50"
+                            title="Unpublish project"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
             </div>
 

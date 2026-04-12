@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getProject, updateProject, addMessage, addVersion, getUser, updateUserCredits } from '@/lib/firestore';
+import { getProject, updateProject, addMessage, addVersion, getUser, updateUserCredits } from '@/lib/firestore-admin';
 import { AVAILABLE_MODELS } from '@/lib/models';
 import { ENHANCE_REVISION_SYSTEM, GENERATE_REVISION_SYSTEM } from '@/prompts';
 
@@ -269,7 +269,7 @@ IMPORTANT INSTRUCTIONS:
                             { role: "system", content: GENERATE_REVISION_SYSTEM() },
                             { role: "user", content: revisionUserPrompt }
                         ],
-                        max_tokens: 16384,
+                        max_tokens: 65536,
                         temperature: 0.6,
                         top_p: 0.95,
                         stream: true,
@@ -288,7 +288,7 @@ IMPORTANT INSTRUCTIONS:
                             { role: "system", content: GENERATE_REVISION_SYSTEM() },
                             { role: "user", content: revisionUserPrompt }
                         ],
-                        max_tokens: 8000,
+                        max_tokens: 32768,
                         stream: true,
                     });
 
@@ -305,7 +305,7 @@ IMPORTANT INSTRUCTIONS:
                             { role: "system", content: GENERATE_REVISION_SYSTEM() },
                             { role: "user", content: revisionUserPrompt }
                         ],
-                        max_tokens: 16000,
+                        max_tokens: 65536,
                         stream: true,
                     });
 

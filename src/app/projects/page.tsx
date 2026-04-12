@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
-import { getUserProjects, Project, deleteProject } from '@/lib/firestore';
+import { getUserProjects, Project, deleteProject, unpublishProject } from '@/lib/firestore';
 import { Timestamp } from 'firebase/firestore';
 
 export default function ProjectsPage() {
@@ -31,6 +31,13 @@ export default function ProjectsPage() {
         if (confirm('Are you sure you want to delete this project?')) {
             await deleteProject(projectId);
             setProjects(projects.filter(p => p.id !== projectId));
+        }
+    };
+
+    const handleUnpublish = async (projectId: string) => {
+        if (confirm('Unpublish this project? It will be removed from the community page.')) {
+            await unpublishProject(projectId);
+            setProjects(projects.map(p => p.id === projectId ? { ...p, isPublished: false, published_code: '' } : p));
         }
     };
 
@@ -150,8 +157,17 @@ export default function ProjectsPage() {
                                             {project.name}
                                         </h3>
                                         {project.isPublished && (
-                                            <span className="px-2 py-0.5 bg-purple-600/20 text-purple-400 text-xs rounded">
+                                            <span className="px-2 py-0.5 bg-purple-600/20 text-purple-400 text-xs rounded flex items-center gap-1">
                                                 Website
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleUnpublish(project.id); }}
+                                                    className="ml-1 w-4 h-4 rounded-full bg-red-500/30 hover:bg-red-500/60 flex items-center justify-center transition-colors"
+                                                    title="Unpublish"
+                                                >
+                                                    <svg className="w-2.5 h-2.5 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
                                             </span>
                                         )}
                                     </div>

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { createProject, addMessage, addVersion, incrementUserCreation, getUser } from '@/lib/firestore';
+import { createProject, addMessage, addVersion, incrementUserCreation, getUser } from '@/lib/firestore-admin';
 import { AVAILABLE_MODELS } from '@/lib/models';
 import { ENHANCE_PROMPT_SYSTEM, GENERATE_CODE_SYSTEM } from '@/prompts';
 
@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
                         { role: "system", content: GENERATE_CODE_SYSTEM() },
                         { role: "user", content: enhancedPrompt }
                     ],
-                    max_tokens: 16384,
+                    max_tokens: 65536,
                     temperature: 0.6,
                     top_p: 0.95,
                     stream: true,
@@ -406,7 +406,7 @@ export async function POST(request: NextRequest) {
                         { role: "system", content: GENERATE_CODE_SYSTEM() },
                         { role: "user", content: enhancedPrompt }
                     ],
-                    max_tokens: 16000,
+                    max_tokens: 65536,
                     stream: true,
                 });
 
@@ -423,7 +423,7 @@ export async function POST(request: NextRequest) {
                         { role: "system", content: GENERATE_CODE_SYSTEM() },
                         { role: "user", content: enhancedPrompt }
                     ],
-                    max_tokens: 16000,
+                    max_tokens: 32768,
                     stream: true,
                 });
 

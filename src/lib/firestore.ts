@@ -177,6 +177,10 @@ export async function publishProject(projectId: string, code: string) {
     await updateProject(projectId, { isPublished: true, published_code: code });
 }
 
+export async function unpublishProject(projectId: string) {
+    await updateProject(projectId, { isPublished: false, published_code: '' });
+}
+
 // Conversation operations
 export async function addMessage(projectId: string, role: 'user' | 'assistant', content: string): Promise<string> {
     const convRef = await addDoc(collection(db, 'projects', projectId, 'conversations'), {
