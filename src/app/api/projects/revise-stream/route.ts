@@ -232,7 +232,22 @@ export async function POST(request: NextRequest) {
                 }
                 // --- End stream filter ---
 
-                const revisionUserPrompt = `Current website code:\n${project.current_code}\n\nRevision request: ${enhancedRevision}`;
+                const revisionUserPrompt = `===== ORIGINAL CODE (PRESERVE UNCHANGED PARTS EXACTLY) =====
+${project.current_code}
+===== END OF ORIGINAL CODE =====
+
+===== REVISION REQUEST =====
+${enhancedRevision}
+===== END OF REVISION REQUEST =====
+
+IMPORTANT INSTRUCTIONS:
+1. Output the COMPLETE HTML document with ONLY the requested changes applied.
+2. Every line of code that is NOT related to the revision request must remain EXACTLY as it appears in the original code above — same classes, same content, same order, same structure.
+3. Do NOT simplify, reformat, reorganize, or "improve" any part of the code that wasn't mentioned in the revision request.
+4. Do NOT remove existing animations, gradients, shadows, hover effects, or any visual styling.
+5. Do NOT change section ordering or page layout unless specifically requested.
+6. Think of this as a surgical edit — change the minimum amount of code to fulfill the request.
+7. Start your response with <!DOCTYPE html> immediately.`;
 
                 if (provider === 'gemini') {
                     const geminiModel = gemini.getGenerativeModel({

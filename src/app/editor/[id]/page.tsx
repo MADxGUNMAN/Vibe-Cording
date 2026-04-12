@@ -44,6 +44,8 @@ export default function EditorPage() {
     const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
     const [isCodeFullscreen, setIsCodeFullscreen] = useState(false);
     const [displayedCode, setDisplayedCode] = useState('');
+    const [isCodeEditing, setIsCodeEditing] = useState(false);
+    const [editableCode, setEditableCode] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null);
     const [editMode, setEditMode] = useState(false);
@@ -495,6 +497,26 @@ export default function EditorPage() {
         }
     };
 
+    const handleSaveCode = async () => {
+        if (!projectId || !editableCode.trim()) return;
+        setSaving(true);
+        try {
+            await updateProject(projectId, { current_code: editableCode });
+            await addVersion(projectId, editableCode, 'Manual code edit');
+            setCurrentCode(editableCode);
+            setDisplayedCode(editableCode);
+            setProject(prev => prev ? { ...prev, current_code: editableCode } : prev);
+            setIsCodeEditing(false);
+
+            const vers = await getVersions(projectId);
+            setVersions(vers);
+        } catch (error) {
+            console.error('Error saving code:', error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleSend = async () => {
         if (!input.trim() || sending || !user) return;
 
@@ -667,6 +689,14 @@ export default function EditorPage() {
         }
     };
 
+    // Auto-hide chat when switching to mobile/tablet device preview
+    const handleDeviceChange = (newDevice: DeviceType) => {
+        setDevice(newDevice);
+        if (newDevice === 'mobile') {
+            setIsChatVisible(false);
+        }
+    };
+
     if (authLoading || loading) {
         return (
             <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
@@ -737,7 +767,7 @@ export default function EditorPage() {
                             {/* Device toggles */}
                             <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg flex-shrink-0">
                                 <button
-                                    onClick={() => setDevice('mobile')}
+                                    onClick={() => handleDeviceChange('mobile')}
                                     className={`p-1.5 md:p-2 rounded ${device === 'mobile' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     title="Mobile"
                                 >
@@ -746,7 +776,7 @@ export default function EditorPage() {
                                     </svg>
                                 </button>
                                 <button
-                                    onClick={() => setDevice('tablet')}
+                                    onClick={() => handleDeviceChange('tablet')}
                                     className={`p-1.5 md:p-2 rounded ${device === 'tablet' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     title="Tablet"
                                 >
@@ -755,7 +785,7 @@ export default function EditorPage() {
                                     </svg>
                                 </button>
                                 <button
-                                    onClick={() => setDevice('desktop')}
+                                    onClick={() => handleDeviceChange('desktop')}
                                     className={`p-1.5 md:p-2 rounded ${device === 'desktop' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     title="Desktop"
                                 >
@@ -806,7 +836,7 @@ export default function EditorPage() {
                             {/* Device toggles */}
                             <div className="flex items-center gap-1 p-1 bg-white/5 rounded-lg flex-shrink-0">
                                 <button
-                                    onClick={() => setDevice('mobile')}
+                                    onClick={() => handleDeviceChange('mobile')}
                                     className={`p-1.5 md:p-2 rounded ${device === 'mobile' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     title="Mobile"
                                 >
@@ -815,7 +845,7 @@ export default function EditorPage() {
                                     </svg>
                                 </button>
                                 <button
-                                    onClick={() => setDevice('tablet')}
+                                    onClick={() => handleDeviceChange('tablet')}
                                     className={`p-1.5 md:p-2 rounded ${device === 'tablet' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     title="Tablet"
                                 >
@@ -824,7 +854,7 @@ export default function EditorPage() {
                                     </svg>
                                 </button>
                                 <button
-                                    onClick={() => setDevice('desktop')}
+                                    onClick={() => handleDeviceChange('desktop')}
                                     className={`p-1.5 md:p-2 rounded ${device === 'desktop' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                     title="Desktop"
                                 >
@@ -936,7 +966,7 @@ export default function EditorPage() {
                 {/* Chat Toggle Button - Always visible, positioned at chat edge */}
                 <button
                     onClick={() => setIsChatVisible(!isChatVisible)}
-                    className={`absolute top-1/2 -translate-y-1/2 z-30 w-6 h-14 bg-purple-600/80 hover:bg-purple-600 border border-purple-500/50 rounded-r-lg flex items-center justify-center text-white transition-all shadow-lg ${isChatVisible ? 'left-[280px] md:left-[350px]' : 'left-0'}`}
+                    className={`absolute top-1/2 -translate-y-1/2 z-30 w-6 h-14 bg-purple-600/80 hover:bg-purple-600 border border-purple-500/50 rounded-r-lg flex items-center justify-center text-white shadow-lg ${isChatVisible ? 'left-[240px] md:left-[350px]' : 'left-0'}`}
                     style={{ transition: 'left 0.3s ease-in-out' }}
                     title={isChatVisible ? 'Hide Chat' : 'Show Chat'}
                 >
@@ -946,7 +976,7 @@ export default function EditorPage() {
                 </button>
 
                 {/* Chat Panel - Collapsible */}
-                <div className={`${isChatVisible ? 'w-[280px] md:w-[350px]' : 'w-0'} border-r border-white/10 flex flex-col bg-[#12121a] transition-all duration-300 overflow-hidden flex-shrink-0 min-h-0`}>
+                <div className={`${isChatVisible ? 'w-[240px] md:w-[350px]' : 'w-0'} border-r border-white/10 flex flex-col bg-[#12121a] transition-all duration-300 overflow-hidden flex-shrink-0 min-h-0`}>
                     {/* Chat header */}
                     <div className="p-3 md:p-4 border-b border-white/10 flex-shrink-0">
                         <h2 className="text-white font-medium text-sm md:text-base">Chat</h2>
@@ -1081,9 +1111,44 @@ export default function EditorPage() {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {/* Edit Code Toggle */}
                                     <button
                                         onClick={() => {
-                                            navigator.clipboard.writeText(currentCode);
+                                            if (!isCodeEditing) {
+                                                setEditableCode(currentCode);
+                                                setIsCodeEditing(true);
+                                            } else {
+                                                setIsCodeEditing(false);
+                                            }
+                                        }}
+                                        className={`px-3 py-1.5 rounded text-sm flex items-center gap-1.5 transition-colors ${isCodeEditing ? 'bg-purple-600 text-white' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}
+                                        disabled={isTyping}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                        {isCodeEditing ? 'Editing' : 'Edit Code'}
+                                    </button>
+                                    {/* Save Code Button (visible only when editing) */}
+                                    {isCodeEditing && (
+                                        <button
+                                            onClick={handleSaveCode}
+                                            disabled={saving}
+                                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                        >
+                                            {saving ? (
+                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            ) : (
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
+                                            Save
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(isCodeEditing ? editableCode : currentCode);
                                             alert('Code copied to clipboard!');
                                         }}
                                         className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-sm flex items-center gap-1 transition-colors"
@@ -1110,29 +1175,57 @@ export default function EditorPage() {
                                         {isCodeFullscreen ? 'Exit' : 'Fullscreen'}
                                     </button>
                                     <div className="text-gray-500 text-sm">
-                                        {displayedCode.split('\n').length} lines
+                                        {(isCodeEditing ? editableCode : displayedCode).split('\n').length} lines
                                     </div>
                                 </div>
                             </div>
 
                             {/* Code Content */}
-                            <div ref={codeContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 font-mono text-sm">
-                                <pre className="text-gray-300">
-                                    <code>
-                                        {displayedCode.split('\n').map((line, i) => (
-                                            <div key={i} className="flex hover:bg-white/5 leading-6">
-                                                <span className="select-none w-12 text-right pr-4 text-gray-600 border-r border-white/10 mr-4 flex-shrink-0">
-                                                    {i + 1}
-                                                </span>
-                                                <span className="flex-1 whitespace-pre-wrap break-all">{line}</span>
-                                            </div>
-                                        ))}
-                                        {isTyping && (
-                                            <span className="inline-block w-2 h-5 bg-green-400 animate-pulse ml-1"></span>
-                                        )}
-                                    </code>
-                                </pre>
-                            </div>
+                            {isCodeEditing ? (
+                                <div className="flex-1 overflow-hidden flex flex-col">
+                                    <textarea
+                                        value={editableCode}
+                                        onChange={(e) => setEditableCode(e.target.value)}
+                                        className="flex-1 w-full p-4 bg-[#0d1117] text-gray-300 font-mono text-sm resize-none focus:outline-none border-none leading-6"
+                                        spellCheck={false}
+                                        style={{ tabSize: 2 }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Tab') {
+                                                e.preventDefault();
+                                                const start = e.currentTarget.selectionStart;
+                                                const end = e.currentTarget.selectionEnd;
+                                                const value = e.currentTarget.value;
+                                                setEditableCode(value.substring(0, start) + '  ' + value.substring(end));
+                                                requestAnimationFrame(() => {
+                                                    e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 2;
+                                                });
+                                            }
+                                            if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+                                                e.preventDefault();
+                                                handleSaveCode();
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div ref={codeContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 font-mono text-sm">
+                                    <pre className="text-gray-300">
+                                        <code>
+                                            {displayedCode.split('\n').map((line, i) => (
+                                                <div key={i} className="flex hover:bg-white/5 leading-6">
+                                                    <span className="select-none w-12 text-right pr-4 text-gray-600 border-r border-white/10 mr-4 flex-shrink-0">
+                                                        {i + 1}
+                                                    </span>
+                                                    <span className="flex-1 whitespace-pre-wrap break-all">{line}</span>
+                                                </div>
+                                            ))}
+                                            {isTyping && (
+                                                <span className="inline-block w-2 h-5 bg-green-400 animate-pulse ml-1"></span>
+                                            )}
+                                        </code>
+                                    </pre>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         /* Preview Panel */
@@ -1144,12 +1237,12 @@ export default function EditorPage() {
                             )}
 
                             <div
-                                className="bg-white rounded-lg overflow-hidden shadow-2xl transition-all duration-300 mx-auto"
+                                className={`bg-white overflow-hidden shadow-2xl transition-all duration-300 mx-auto ${device === 'desktop' ? '' : 'rounded-lg'}`}
                                 style={{
                                     width: getDeviceWidth(),
                                     maxWidth: '100%',
-                                    height: device === 'desktop' ? '100%' : 'calc(100% - 32px)',
-                                    minHeight: device === 'mobile' ? '667px' : device === 'tablet' ? '600px' : 'auto',
+                                    height: device === 'desktop' ? '100%' : 'calc(100% - 16px)',
+                                    maxHeight: '100%',
                                 }}
                             >
                                 <iframe

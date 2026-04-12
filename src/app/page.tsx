@@ -1,9 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { AVAILABLE_MODELS } from '@/lib/models';
+
+// Curated list of creative website ideas for "I'm feeling lucky"
+const LUCKY_PROMPTS = [
+  "A retro-futuristic portfolio website for a space photographer with parallax star backgrounds, floating image galleries, and a glowing neon color scheme",
+  "An interactive recipe sharing platform with a dark kitchen theme, animated ingredient cards, step-by-step cooking mode, and a community rating system",
+  "A personal finance dashboard with animated charts, expense tracking cards, budget goals with progress bars, and a clean minimal dark theme",
+  "A virtual art gallery website with room-like navigation, hover-to-zoom paintings, artist bios, and an elegant black and gold color palette",
+  "A music streaming landing page with audio waveform visualizations, album artwork grids, playlist cards, and a gradient purple-to-pink theme",
+  "An AI-powered travel planner with destination cards, interactive map sections, itinerary builder, and dreamy pastel gradient backgrounds",
+  "A cyberpunk-themed gaming tournament platform with neon glitch effects, leaderboard tables, team profiles, and live match countdown timers",
+  "A plant care companion app landing page with botanical illustrations, watering schedule cards, plant identification features, and earthy green aesthetics",
+  "A freelancer marketplace with skill-based filtering, project cards, review system, earnings dashboard, and a professional blue-grey theme",
+  "A weather dashboard with animated weather icons, 7-day forecast cards, location search, and dynamic backgrounds that change with weather conditions",
+  "A movie review platform with cinematic hero sections, film rating cards, trailer embeds, watchlist feature, and a dark theater-inspired design",
+  "A fitness tracking dashboard with workout cards, progress rings, exercise library, weekly stats charts, and an energetic orange-red gradient theme",
+  "A space exploration educational website with 3D planet cards, timeline of missions, astronaut profiles, and a deep-space dark theme with stars",
+  "An online bookstore with book cover carousels, reading progress trackers, review sections, genre filters, and a warm parchment-inspired design",
+  "A creative agency portfolio with case study cards, team section with hover effects, client testimonials slider, and bold typography on dark backgrounds",
+  "A coffee shop website with a cozy brown aesthetic, menu cards with hover animations, store locator, loyalty program section, and floating steam effects",
+  "A cryptocurrency dashboard with real-time price cards, portfolio pie charts, transaction history, market trends, and a sleek dark-green theme",
+  "A pet adoption platform with animal profile cards, filter by breed/age, adoption process stepper, success stories carousel, and playful warm colors",
+  "An online learning platform with course cards, progress tracking, video lesson layouts, quiz components, and a modern purple-blue gradient design",
+  "A smart home control dashboard with device cards, room-by-room navigation, energy usage charts, automation schedules, and a minimal dark UI",
+];
 
 export default function HomePage() {
   const [prompt, setPrompt] = useState('');
@@ -12,6 +36,7 @@ export default function HomePage() {
   const [enhancePrompt, setEnhancePrompt] = useState(true);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [showStyleDropdown, setShowStyleDropdown] = useState(false);
+  const [isLuckyLoading, setIsLuckyLoading] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
 
@@ -45,6 +70,46 @@ export default function HomePage() {
     sessionStorage.setItem('pendingStyles', JSON.stringify(selectedStyles));
     router.push('/generate');
   };
+
+  // "I'm feeling lucky" — picks a random creative prompt with a shuffling animation and auto-submits
+  const handleLucky = useCallback(async () => {
+    if (isLuckyLoading) return;
+
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    setIsLuckyLoading(true);
+
+    // Pick a random prompt
+    const luckyPrompt = LUCKY_PROMPTS[Math.floor(Math.random() * LUCKY_PROMPTS.length)];
+
+    // Shuffling animation — rapidly cycle through random prompts before landing on the chosen one
+    const shuffleDuration = 1200; // total animation time in ms
+    const intervalTime = 70; // how fast the text shuffles
+    const totalSteps = Math.floor(shuffleDuration / intervalTime);
+    let step = 0;
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        step++;
+        if (step < totalSteps) {
+          // Show random snippets during shuffle
+          const randomIdx = Math.floor(Math.random() * LUCKY_PROMPTS.length);
+          const snippet = LUCKY_PROMPTS[randomIdx];
+          setPrompt(snippet.substring(0, Math.min(40 + step * 3, snippet.length)) + '...');
+        } else {
+          // Final — set the actual chosen prompt
+          clearInterval(interval);
+          setPrompt(luckyPrompt);
+          resolve();
+        }
+      }, intervalTime);
+    });
+
+    setIsLuckyLoading(false);
+  }, [isLuckyLoading, user, router]);
 
   const getSelectedModelName = () => {
     const model = AVAILABLE_MODELS.find(m => m.id === selectedModel);
@@ -265,13 +330,31 @@ export default function HomePage() {
                 )}
               </div>
 
-              <button
-                onClick={handleCreate}
-                disabled={!prompt.trim()}
-                className="px-5 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg font-medium text-sm hover:from-purple-700 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                Create with AI
-              </button>
+              <div className="flex items-center gap-2">
+                {/* I'm feeling lucky button */}
+                <button
+                  onClick={handleLucky}
+                  disabled={isLuckyLoading}
+                  className="group px-4 py-2 bg-white/5 border border-white/10 text-white rounded-lg font-medium text-sm hover:bg-white/10 hover:border-purple-500/30 transition-all disabled:opacity-70 disabled:cursor-wait flex items-center gap-2 whitespace-nowrap cursor-pointer"
+                >
+                  {isLuckyLoading ? (
+                    <span className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                  ) : (
+                    <span className="text-purple-400 group-hover:text-purple-300 transition-colors text-base">✦</span>
+                  )}
+                  <span className="hidden sm:inline">I&apos;m feeling lucky</span>
+                  <span className="sm:hidden">Lucky</span>
+                </button>
+
+                {/* Create with AI button */}
+                <button
+                  onClick={handleCreate}
+                  disabled={!prompt.trim() || isLuckyLoading}
+                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg font-medium text-sm hover:from-purple-700 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+                >
+                  Create with AI
+                </button>
+              </div>
             </div>
           </div>
         </div>

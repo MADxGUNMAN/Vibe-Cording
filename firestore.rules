@@ -1,10 +1,143 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all authenticated users to read/write all documents
-    // In production, you should tighten these rules
+
+    // =============================================
+    // HELPER FUNCTIONS
+    // =============================================
+
+    // Check if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if the user is an admin (read from their existing user doc)
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Check if the user is trying to change a specific field
+    function fieldChanged(field) {
+      return request.resource.data[field] != resource.data[field];
+    }
+
+    // Check if a field exists in the incoming data
+    function incomingHasField(field) {
+      return field in request.resource.data;
+    }
+
+    // =============================================
+    // USERS COLLECTION
+    // =============================================
+    match /users/{userId} {
+      // Anyone can read user profiles (needed for community page to show owner names)
+      // Only basic profile info is stored (name, imageUrl) - sensitive fields are protected by update rules
+      allow read: if true;
+
+      // Users can create their OWN profile only
+      // The isAdmin field must match what the server sets (prevent self-promotion)
+      allow create: if isOwner(userId)
+        && incomingHasField('email')
+        && incomingHasField('name')
+        && incomingHasField('credits')
+        && incomingHasField('createdAt');
+
+      // Users can update their OWN profile
+      // BUT cannot change: isAdmin, credits, totalCreation, email, id
+      allow update: if isOwner(userId)
+        && (!incomingHasField('isAdmin') || !fieldChanged('isAdmin'))
+        && (!incomingHasField('credits') || !fieldChanged('credits'))
+        && (!incomingHasField('totalCreation') || !fieldChanged('totalCreation'))
+        && (!incomingHasField('email') || !fieldChanged('email'))
+        && (!incomingHasField('id') || !fieldChanged('id'));
+
+      // Nobody can delete user profiles from client
+      allow delete: if false;
+    }
+
+    // =============================================
+    // PROJECTS COLLECTION
+    // =============================================
+    match /projects/{projectId} {
+      // Published projects can be read by ANYONE (community page - no login required)
+      // Own projects can be read by the owner
+      // Admins can read all projects
+      allow read: if resource.data.isPublished == true
+        || (isAuthenticated() && resource.data.userId == request.auth.uid)
+        || isAdmin();
+
+      // Users can create projects owned by themselves only
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.isPublished == false;
+
+      // Only the project owner can update their project
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        // Cannot change ownership
+        && (!incomingHasField('userId') || !fieldChanged('userId'));
+
+      // Only the project owner or an admin can delete a project
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // -----------------------------------------
+      // CONVERSATIONS SUB-COLLECTION
+      // projects/{projectId}/conversations/{messageId}
+      // -----------------------------------------
+      match /conversations/{messageId} {
+        // Only the project owner can read conversation messages
+        allow read: if isAuthenticated()
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+
+        // Only the project owner can write conversation messages
+        allow create: if isAuthenticated()
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+
+        // Messages should not be edited or deleted from client
+        allow update, delete: if false;
+      }
+
+      // -----------------------------------------
+      // VERSIONS SUB-COLLECTION
+      // projects/{projectId}/versions/{versionId}
+      // -----------------------------------------
+      match /versions/{versionId} {
+        // Only the project owner can read version history
+        allow read: if isAuthenticated()
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+
+        // Only the project owner can create new versions
+        allow create: if isAuthenticated()
+          && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+
+        // Versions are immutable - no updates or deletes from client
+        allow update, delete: if false;
+      }
+    }
+
+    // =============================================
+    // OTPs COLLECTION (server-side only via Admin SDK)
+    // =============================================
+    match /otps/{otpId} {
+      // OTPs are managed entirely by server-side Admin SDK
+      // No client access allowed
+      allow read, write: if false;
+    }
+
+    // =============================================
+    // CATCH-ALL: Deny everything else
+    // =============================================
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

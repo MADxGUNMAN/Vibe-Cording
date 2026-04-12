@@ -5,6 +5,7 @@ export const AVAILABLE_MODELS = [
     { id: 'gemma-4-31b-it', name: 'Gemma 4 31B', description: 'Latest Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model', provider: 'gemini', tier: 'High', color: 'blue' },
     { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fast Gemini model', provider: 'gemini', tier: 'Fast', color: 'blue' },
+    { id: 'minimax/minimax-m2.5:free', name: 'MiniMax M2.5', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
     { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', description: 'OpenRouter free model', provider: 'openrouter', tier: 'Most Powerful', color: 'red' },
     { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B', description: 'Large open source GPT', provider: 'openrouter', tier: 'Powerful', color: 'orange' },
     { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B', description: 'Smaller open source GPT', provider: 'openrouter', tier: 'High', color: 'yellow' },
