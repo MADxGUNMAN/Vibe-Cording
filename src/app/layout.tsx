@@ -19,6 +19,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Vibe Coder - Turn thoughts into websites instantly, with AI",
   description: "Create, customize and publish websites faster than ever with our AI Site Builder.",
+  metadataBase: new URL("https://vibecoder.gunbot.tech"),
+  alternates: {
+    canonical: "/",
+  },
 };
 
 export default function RootLayout({
