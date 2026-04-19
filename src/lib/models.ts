@@ -14,6 +14,7 @@ export const AVAILABLE_MODELS = [
     { id: 'moonshotai/kimi-k2.5', name: 'Kimi K2.5', description: 'NVIDIA Kimi K2.5 thinking model', provider: 'nvidia', tier: 'Most Powerful', color: 'purple' },
     { id: 'minimaxai/minimax-m2.5', name: 'MiniMax M2.5', description: 'NVIDIA MiniMax M2.5 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
     { id: 'z-ai/glm5', name: 'GLM 5', description: 'NVIDIA GLM 5 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
+    { id: 'z-ai/glm-5.1', name: 'GLM 5.1', description: 'NVIDIA GLM 5.1 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
 ];
 
 export type ModelInfo = typeof AVAILABLE_MODELS[number];
