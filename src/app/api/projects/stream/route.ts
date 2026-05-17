@@ -27,6 +27,12 @@ const nvidia = new OpenAI({
     apiKey: process.env.NVIDIA_API_KEY || "",
 });
 
+// Initialize OpenCode Zen client
+const opencode = new OpenAI({
+    baseURL: "https://opencode.ai/zen/v1",
+    apiKey: process.env.OPENCODE_API_KEY || "",
+});
+
 // Initialize Gemini clients with fallback keys
 const GEMINI_API_KEYS = [
     process.env.GEMINI_API_KEY || "",
@@ -244,6 +250,16 @@ export async function POST(request: NextRequest) {
                         max_tokens: 1000,
                     });
                     enhancedPrompt = enhanceResponse.choices[0]?.message?.content || prompt;
+                } else if (modelInfo.provider === 'opencode') {
+                    const enhanceResponse = await opencode.chat.completions.create({
+                        model: model,
+                        messages: [
+                            { role: "system", content: ENHANCE_PROMPT_SYSTEM() + styleInstruction },
+                            { role: "user", content: prompt }
+                        ],
+                        max_tokens: 1000,
+                    });
+                    enhancedPrompt = enhanceResponse.choices[0]?.message?.content || prompt;
                 } else if (modelInfo.provider === 'openrouter') {
                     const enhanceResponse = await openrouter.chat.completions.create({
                         model: model,
@@ -401,6 +417,23 @@ export async function POST(request: NextRequest) {
                 }
             } else if (modelInfo.provider === 'openrouter') {
                 const generateResponse = await openrouter.chat.completions.create({
+                    model: model,
+                    messages: [
+                        { role: "system", content: GENERATE_CODE_SYSTEM() },
+                        { role: "user", content: enhancedPrompt }
+                    ],
+                    max_tokens: 65536,
+                    stream: true,
+                });
+
+                for await (const chunk of generateResponse) {
+                    const content = chunk.choices[0]?.delta?.content || '';
+                    if (content) {
+                        await processStreamChunk(content);
+                    }
+                }
+            } else if (modelInfo.provider === 'opencode') {
+                const generateResponse = await opencode.chat.completions.create({
                     model: model,
                     messages: [
                         { role: "system", content: GENERATE_CODE_SYSTEM() },

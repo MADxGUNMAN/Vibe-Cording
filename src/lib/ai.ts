@@ -10,6 +10,11 @@ const openai = new OpenAI({
     },
 });
 
+const opencode = new OpenAI({
+    baseURL: "https://opencode.ai/zen/v1",
+    apiKey: process.env.OPENCODE_API_KEY || "",
+});
+
 // System prompts from assets
 const ENHANCE_PROMPT_SYSTEM = `You are a prompt enhancement specialist. Take the user's website request and expand it into a detailed, comprehensive prompt that will help create the best possible website.
 

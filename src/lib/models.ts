@@ -15,6 +15,11 @@ export const AVAILABLE_MODELS = [
     { id: 'minimaxai/minimax-m2.5', name: 'MiniMax M2.5', description: 'NVIDIA MiniMax M2.5 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
     { id: 'z-ai/glm5', name: 'GLM 5', description: 'NVIDIA GLM 5 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
     { id: 'z-ai/glm-5.1', name: 'GLM 5.1', description: 'NVIDIA GLM 5.1 model', provider: 'nvidia', tier: 'Powerful', color: 'purple' },
+    // OpenCode Zen Models
+    { id: 'minimax-m2.5-free', name: 'MiniMax M2.5 Free', description: 'Fast, efficient OpenCode Zen model', provider: 'opencode', tier: 'Most Powerful', color: 'red' },
+    { id: 'nemotron-3-super-free', name: 'Nemotron 3 Super Free', description: 'Anthropic model via OpenCode Zen', provider: 'opencode', tier: 'Powerful', color: 'orange' },
+    { id: 'ring-2.6-1t-free', name: 'Ring 2.6 1T Free', description: 'Google model via OpenCode Zen', provider: 'opencode', tier: 'Fast', color: 'blue' },
+    { id: 'deepseek-v4-flash-free', name: 'DeepSeek V4 Flash (Free)', description: 'Free tier model via OpenCode Zen', provider: 'opencode', tier: 'Fast', color: 'green' },
 ];
 
 export type ModelInfo = typeof AVAILABLE_MODELS[number];
